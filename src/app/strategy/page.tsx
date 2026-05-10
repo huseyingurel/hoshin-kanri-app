@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Target, ArrowRight, Layers, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-const prisma = new PrismaClient();
 
 export const dynamic = 'force-dynamic';
 

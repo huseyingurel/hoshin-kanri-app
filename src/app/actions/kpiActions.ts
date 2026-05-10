@@ -1,11 +1,8 @@
 "use server"
 
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-
 import { getRagSettings } from "./settingActions";
-
-const prisma = new PrismaClient();
 
 export async function saveKpiRecord(kpiId: string, targetValue: number, actualValue: number, periodDate: Date, ownerComment: string) {
   const variance = actualValue - targetValue;

@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { DataEntryClient } from "./DataEntryClient";
 import { FileEdit } from "lucide-react";
 import { getRagSettings } from "../actions/settingActions";
-
-const prisma = new PrismaClient();
 
 export const dynamic = 'force-dynamic';
 

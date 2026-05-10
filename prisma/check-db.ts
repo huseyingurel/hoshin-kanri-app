@@ -3,21 +3,22 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  const hoshinCount = await prisma.hoshin.count();
-  const taskCount = await prisma.majorTask.count();
-  const kpiCount = await prisma.kPI.count();
-  const deptCount = await prisma.department.count();
-
-  console.log("📊 Veritabanı İstatistikleri:");
-  console.log(`- Hoshin Sayısı: ${hoshinCount}`);
-  console.log(`- Ana Görev Sayısı: ${taskCount}`);
-  console.log(`- KPI Sayısı: ${kpiCount}`);
-  console.log(`- Departman Sayısı: ${deptCount}`);
+  const hoshins = await prisma.hoshin.findMany({
+    include: { _count: { select: { majorTasks: true } } }
+  });
   
-  if (hoshinCount > 0) {
-    const latestHoshin = await prisma.hoshin.findFirst({ orderBy: { createdAt: 'desc' } });
-    console.log(`- Son eklenen Hoshin: ${latestHoshin?.title}`);
-  }
+  console.log("🔍 Veritabanı Detaylı Kontrol:");
+  console.log(`Toplam Hoshin Sayısı: ${hoshins.length}`);
+  
+  hoshins.forEach(h => {
+    console.log(`- [${h.id}] ${h.title} (${h.year}) - Görev Sayısı: ${h._count.majorTasks}`);
+  });
+
+  const users = await prisma.user.findMany();
+  console.log(`\nToplam Kullanıcı Sayısı: ${users.length}`);
+  users.forEach(u => {
+    console.log(`- ${u.email} (ID: ${u.id})`);
+  });
 }
 
 main()

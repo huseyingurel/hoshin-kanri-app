@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { ReportClient } from "./ReportClient";
 import { FileText } from "lucide-react";
-
-const prisma = new PrismaClient();
 
 export const dynamic = 'force-dynamic';
 
