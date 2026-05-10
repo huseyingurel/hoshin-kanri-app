@@ -178,7 +178,9 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                       setAssigneeId(val || "");
                     }}>
                       <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-8">
-                        <SelectValue placeholder="Sorumlu Ata..." />
+                        <SelectValue placeholder="Sorumlu Ata...">
+                          {assigneeId ? (users.find((u: any) => u.id === assigneeId)?.name || "Sorumlu Seçildi") : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-900 border-zinc-800">
                         {users.map((u: any) => (
@@ -265,7 +267,9 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                               <Label>Sorumlu Kişi (Opsiyonel)</Label>
                               <Select value={assigneeId} onValueChange={(val) => setAssigneeId(val || "")}>
                                 <SelectTrigger className="bg-zinc-900 border-zinc-800">
-                                  <SelectValue placeholder="Atanacak kişiyi seçin..." />
+                                  <SelectValue placeholder="Atanacak kişiyi seçin...">
+                                    {assigneeId ? (users.find((u: any) => u.id === assigneeId)?.name || "Seçili") : null}
+                                  </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent className="bg-zinc-900 border-zinc-800">
                                   {users.map((u: any) => (
