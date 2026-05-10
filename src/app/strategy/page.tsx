@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 
 const prisma = new PrismaClient();
 
+export const dynamic = 'force-dynamic';
+
 export default async function StrategyTree() {
   const hoshins = await prisma.hoshin.findMany({
     include: {

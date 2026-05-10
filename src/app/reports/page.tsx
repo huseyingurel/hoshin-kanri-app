@@ -4,6 +4,8 @@ import { FileText } from "lucide-react";
 
 const prisma = new PrismaClient();
 
+export const dynamic = 'force-dynamic';
+
 export default async function ReportsPage() {
   // 1. Genel KPI Sağlığı
   const kpis = await prisma.kPI.findMany({

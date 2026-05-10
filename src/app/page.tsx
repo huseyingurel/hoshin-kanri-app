@@ -3,6 +3,8 @@ import { DashboardClient } from "@/components/DashboardClient";
 
 const prisma = new PrismaClient();
 
+export const dynamic = 'force-dynamic';
+
 export default async function Dashboard() {
   // 1. Hoshin'leri, bağlı MajorTask ve ActionPlan'lerle birlikte çek
   const hoshins = await prisma.hoshin.findMany({

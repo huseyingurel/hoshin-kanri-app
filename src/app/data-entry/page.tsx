@@ -5,6 +5,8 @@ import { getRagSettings } from "../actions/settingActions";
 
 const prisma = new PrismaClient();
 
+export const dynamic = 'force-dynamic';
+
 export default async function DataEntryPage() {
   const kpis = await prisma.kPI.findMany({
     select: {
