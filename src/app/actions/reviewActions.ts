@@ -29,7 +29,7 @@ export async function createReview(data: { title: string, type: string, date: Da
   });
   
   revalidatePath("/meetings");
-  revalidatePath("/reviews"); // Gelecekteki route güncellemesi için
+  revalidatePath("/reviews"); 
   return review;
 }
 

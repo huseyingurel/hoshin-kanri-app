@@ -29,11 +29,12 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
   const handleCreateReview = async () => {
     if (!newReviewTitle) return;
     setIsCreatingReview(true);
-    await createReview({
+    const review = await createReview({
       title: newReviewTitle,
       type: newReviewType,
       date: new Date(),
     });
+    if (review) setSelectedReviewId(review.id);
     setNewReviewTitle("");
     setIsCreatingReview(false);
   };
@@ -84,9 +85,17 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                 <CardDescription>Kararların işleneceği oturumu seçin</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <Select value={selectedReviewId || ""} onValueChange={(val) => setSelectedReviewId(val || null)}>
+                <Select 
+                  key={`select-${reviews.length}-${selectedReviewId}`}
+                  value={selectedReviewId || ""} 
+                  onValueChange={(val) => setSelectedReviewId(val || null)}
+                >
                   <SelectTrigger className="bg-zinc-900 border-zinc-800">
-                    <SelectValue placeholder="Bir değerlendirme seçin..." />
+                    <SelectValue placeholder="Bir değerlendirme seçin...">
+                      {selectedReviewId 
+                        ? (reviews.find((r: any) => r.id === selectedReviewId)?.title || "Oturum Seçildi") 
+                        : "Bir değerlendirme seçin..."}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800">
                     {reviews.map((review: any) => (
@@ -113,7 +122,9 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                   />
                   <Select value={newReviewType} onValueChange={(val) => setNewReviewType(val || "")}>
                     <SelectTrigger className="bg-zinc-900 border-zinc-800">
-                      <SelectValue />
+                      <SelectValue>
+                        {newReviewType === 'MEETING' ? 'Kurul Toplantısı' : 'Uzman Değerlendirmesi'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-zinc-800">
                       <SelectItem value="MEETING">Kurul Toplantısı</SelectItem>
