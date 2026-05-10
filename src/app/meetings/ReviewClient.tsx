@@ -318,17 +318,34 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
               </CardHeader>
               <CardContent>
                 {review.decisions.length > 0 ? (
-                  <div className="flex flex-col gap-2 mt-4 border-t border-zinc-800/50 pt-4">
-                    <h4 className="text-sm font-medium text-zinc-400 mb-2">Alınan Kararlar:</h4>
-                    {review.decisions.map((decision: any) => (
-                      <div key={decision.id} className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-900/50 p-2 rounded">
-                        <ChevronRight size={14} className="text-zinc-500" />
-                        {decision.decisionText}
-                      </div>
-                    ))}
+                  <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
+                    <h4 className="text-sm font-medium text-zinc-400 mb-2">Alınan Kararlar & Sorumlular:</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {review.decisions.map((decision: any) => (
+                        <div key={decision.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800/50">
+                          <div className="flex items-start gap-3 flex-1">
+                            <ChevronRight size={16} className="text-blue-500 mt-1 shrink-0" />
+                            <span className="text-zinc-200 font-medium">{decision.decisionText}</span>
+                          </div>
+                          <div className="flex items-center gap-4 shrink-0">
+                            {decision.assignee ? (
+                              <div className="flex flex-col items-end">
+                                <span className="text-xs font-bold text-zinc-300">{decision.assignee.name}</span>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{decision.assignee.department?.name || 'Genel'}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-zinc-600">Sorumlu atanmadı</span>
+                            )}
+                            <Badge variant="outline" className="text-[10px] border-zinc-800 text-zinc-500 uppercase">
+                              {decision.status === 'OPEN' ? 'Beklemede' : 'Tamamlandı'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-sm text-zinc-500 mt-2">Bu oturumda kayıtlı karar bulunmuyor.</div>
+                  <div className="text-sm text-zinc-500 mt-2 italic">Bu oturumda kayıtlı bir karar bulunmuyor.</div>
                 )}
               </CardContent>
             </Card>

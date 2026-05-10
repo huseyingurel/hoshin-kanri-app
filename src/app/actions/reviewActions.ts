@@ -11,7 +11,15 @@ export async function getReviews() {
     orderBy: { date: 'asc' },
     include: {
       organizer: true,
-      decisions: true
+      decisions: {
+        include: {
+          assignee: {
+            include: {
+              department: true
+            }
+          }
+        }
+      }
     }
   });
 }
