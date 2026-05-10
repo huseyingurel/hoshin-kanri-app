@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { logoutAction } from "@/app/actions/authActions";
 import { 
   LayoutDashboard, 
   Target, 
@@ -7,10 +11,15 @@ import {
   Users, 
   FileText, 
   CalendarDays,
-  Settings
+  Settings,
+  LogOut
 } from "lucide-react";
 
 export function Sidebar() {
+  const pathname = usePathname();
+
+  if (pathname === "/login") return null;
+
   return (
     <div className="flex flex-col w-64 h-screen px-4 py-8 bg-zinc-950 text-zinc-300 border-r border-zinc-800 print-hidden">
       <h2 className="text-2xl font-bold text-white mb-8 px-2 flex items-center gap-2">
@@ -57,6 +66,13 @@ export function Sidebar() {
             RAG & Otomasyon Kuralları
           </Link>
         </div>
+        <button 
+          onClick={() => logoutAction()} 
+          className="flex items-center gap-3 px-3 py-2 mt-4 rounded-md text-rose-400 hover:bg-rose-500/10 transition-colors w-full text-left"
+        >
+          <LogOut size={20} />
+          <span>Çıkış Yap</span>
+        </button>
       </div>
     </div>
   );
