@@ -89,11 +89,12 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                     <SelectValue placeholder="Bir değerlendirme seçin..." />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800">
-                    {reviews.filter((r: any) => r.status !== 'COMPLETED').map((review: any) => (
+                    {reviews.map((review: any) => (
                       <SelectItem key={review.id} value={review.id}>
-                        {review.title} ({review.type === 'MEETING' ? 'Toplantı' : 'Uzman Görüşü'})
+                        {review.title} ({review.type === 'MEETING' ? 'Toplantı' : 'İnceleme'})
                       </SelectItem>
                     ))}
+                    {reviews.length === 0 && <div className="p-2 text-xs text-zinc-500">Henüz oturum yok</div>}
                   </SelectContent>
                 </Select>
 
@@ -130,21 +131,61 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
               </CardContent>
             </Card>
 
-            {/* Seçili Oturum Özeti */}
+            {/* Seçili Oturum Özeti ve Genel Karar Girişi */}
             {selectedReviewId && (
-              <Card className="bg-blue-950/20 border-blue-900/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-blue-400 flex items-center gap-2">
-                    <Target size={16} /> Aktif Oturum Özeti
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold mb-1">
-                    {reviews.find((r: any) => r.id === selectedReviewId)?.decisions.length} 
-                    <span className="text-sm font-normal text-zinc-400 ml-2">Alınan Karar</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="flex flex-col gap-4">
+                <Card className="bg-blue-950/20 border-blue-900/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-blue-400 flex items-center gap-2">
+                      <Target size={16} /> Aktif Oturum Özeti
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-semibold mb-1">
+                      {reviews.find((r: any) => r.id === selectedReviewId)?.decisions.length || 0} 
+                      <span className="text-sm font-normal text-zinc-400 ml-2">Alınan Karar</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-zinc-900/30 border-zinc-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-zinc-300">Genel Karar / Aksiyon Ekle</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <Input 
+                      placeholder="Toplantı genel kararı..." 
+                      value={selectedKpiId === null ? decisionText : ""}
+                      onChange={(e) => {
+                        setSelectedKpiId(null);
+                        setDecisionText(e.target.value);
+                      }}
+                      className="bg-zinc-900 border-zinc-800 text-sm"
+                    />
+                    <Select value={selectedKpiId === null ? assigneeId : ""} onValueChange={(val) => {
+                      setSelectedKpiId(null);
+                      setAssigneeId(val || "");
+                    }}>
+                      <SelectTrigger className="bg-zinc-900 border-zinc-800 text-xs h-8">
+                        <SelectValue placeholder="Sorumlu Ata..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800">
+                        {users.map((u: any) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="sm" 
+                      onClick={handleCreateDecision} 
+                      disabled={!decisionText || !!selectedKpiId}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Kararı Kaydet
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </div>
 
