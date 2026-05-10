@@ -45,8 +45,7 @@ async function main() {
     // Departmanları oluştur/bul
     const depts = await Promise.all(deptNames.map(async name => {
       return await prisma.department.upsert({
-        where: { name_unique: name }, // Hata almamak için prisma schema'da unique constraint olmalı veya findFirst kullanmalı. 
-        // Mevcut şemada unique değilse findFirst kullanacağız.
+        where: { name }, 
         update: {},
         create: { name }
       }).catch(async () => {
@@ -59,7 +58,7 @@ async function main() {
 
     // Hoshin oluştur/bul
     const hoshin = await prisma.hoshin.upsert({
-      where: { title_year_unique: { title: hoshinTitleFull, year: 2026 } },
+      where: { title_year: { title: hoshinTitleFull, year: 2026 } },
       update: {},
       create: {
         title: hoshinTitleFull,

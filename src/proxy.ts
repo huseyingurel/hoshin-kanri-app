@@ -4,7 +4,7 @@ import { decrypt } from "@/lib/auth";
 // Giriş yapmadan erişilebilecek sayfalar
 const publicRoutes = ["/login", "/api/auth"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
 
