@@ -1,0 +1,36 @@
+C:\Users\husey\.gemini\antigravity\scratch\HOSHIN_KANRI\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:336
+        throw new PrismaClientInitializationError(
+              ^
+
+PrismaClientInitializationError: `PrismaClient` needs to be constructed with a non-empty, valid `PrismaClientOptions`:
+
+```
+new PrismaClient({
+  ...
+})
+```
+
+or
+
+```
+constructor() {
+  super({ ... });
+}
+```
+          
+    at new t (C:\Users\husey\.gemini\antigravity\scratch\HOSHIN_KANRI\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:336:15)
+    at <anonymous> (C:\Users\husey\.gemini\antigravity\scratch\HOSHIN_KANRI\prisma\seed.ts:3:16)
+    at Object.<anonymous> (C:\Users\husey\.gemini\antigravity\scratch\HOSHIN_KANRI\prisma\seed.ts:150:4)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object.transformer (C:\Users\husey\.gemini\antigravity\scratch\HOSHIN_KANRI\node_modules\tsx\dist\register-D46fvsV_.cjs:3:1104)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at loadCJSModuleWithModuleLoad (node:internal/modules/esm/translators:327:3)
+    at ModuleWrap.<anonymous> (node:internal/modules/esm/translators:232:7) {
+  clientVersion: '7.8.0',
+  errorCode: undefined,
+  retryable: undefined
+}
+
+Node.js v25.9.0
