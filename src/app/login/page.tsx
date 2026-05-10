@@ -32,7 +32,7 @@ export default function LoginPage() {
 
         <Card className="bg-zinc-900/50 border-zinc-800 backdrop-blur-xl shadow-2xl">
           <CardHeader>
-            <CardTitle className="text-xl text-zinc-100">Giriş Yap</p>
+            <CardTitle className="text-xl text-zinc-100">Giriş Yap</CardTitle>
             <CardDescription className="text-zinc-500">
               Devam etmek için kurumsal kimlik bilgilerinizle giriş yapın.
             </CardDescription>

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 
 type KPI = {
   id: string;
@@ -65,8 +66,9 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4 bg-zinc-950 p-4 border border-zinc-800 rounded-lg">
-        <div className="font-medium">Dönem Seçimi:</div>
+        <Label htmlFor="period-selection" className="font-medium">Dönem Seçimi:</Label>
         <Input 
+          id="period-selection"
           type="month" 
           value={selectedDate} 
           onChange={(e) => setSelectedDate(e.target.value)} 
@@ -97,6 +99,7 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
                   <Input 
                     type="number" 
                     placeholder="Hedef" 
+                    aria-label={`${kpi.name} Dönem Hedefi`}
                     className="bg-zinc-900 border-zinc-700 h-8"
                     value={inputs[kpi.id]?.target || ""}
                     onChange={(e) => handleInputChange(kpi.id, "target", e.target.value)}
@@ -106,6 +109,7 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
                   <Input 
                     type="number" 
                     placeholder="Gerçekleşen" 
+                    aria-label={`${kpi.name} Gerçekleşen Değer`}
                     className={`h-8 ${
                       inputs[kpi.id]?.target && inputs[kpi.id]?.actual && 
                       ((parseFloat(inputs[kpi.id]?.actual) - parseFloat(inputs[kpi.id]?.target)) / parseFloat(inputs[kpi.id]?.target)) * 100 <= settings.redThreshold 
@@ -120,6 +124,7 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
                   <Input 
                     type="text" 
                     placeholder="Sapma varsa yorum..." 
+                    aria-label={`${kpi.name} Açıklama`}
                     className={`h-8 text-xs ${
                       inputs[kpi.id]?.target && inputs[kpi.id]?.actual && 
                       ((parseFloat(inputs[kpi.id]?.actual) - parseFloat(inputs[kpi.id]?.target)) / parseFloat(inputs[kpi.id]?.target)) * 100 <= settings.amberThreshold 
