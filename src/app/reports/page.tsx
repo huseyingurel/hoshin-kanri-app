@@ -74,7 +74,7 @@ export default async function ReportsPage() {
     take: 5,
     include: {
       review: true,
-      assignee: true,
+      assignee: { include: { department: true } },
       kpi: true
     }
   });

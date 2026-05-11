@@ -12,7 +12,8 @@ import {
   FileText, 
   CalendarDays,
   Settings,
-  LogOut
+  LogOut,
+  BookOpen
 } from "lucide-react";
 
 export function Sidebar() {
@@ -55,7 +56,11 @@ export function Sidebar() {
           <FileText size={20} />
           <span>Rapor Merkezi</span>
         </Link>
-      </nav>
+                <Link href="/help" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
+            <BookOpen size={20} />
+            <span>Hoshin Kanri Notlar</span>
+          </Link>
+        </nav>
       <div className="mt-auto flex flex-col gap-1">
         <Link href="/settings" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
           <Settings size={20} />
