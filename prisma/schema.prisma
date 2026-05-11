@@ -15,6 +15,10 @@ model Department {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
+  
+  headId      String?
+  head        User?    @relation("DepartmentHead", fields: [headId], references: [id])
+  
   users       User[]
   actionPlans ActionPlan[]
   kpis        KPI[]
@@ -39,6 +43,8 @@ model User {
   reviewsOrganized     Review[]  @relation("ReviewOrganizer")
   decisionsAssigned    Decision[] @relation("DecisionAssignee")
 
+  departmentHeadOf     Department[] @relation("DepartmentHead")
+  
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
