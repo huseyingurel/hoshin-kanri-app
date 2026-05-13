@@ -1,8 +1,23 @@
+import prisma from "@/lib/prisma";
+import { canManageSettings } from "@/lib/access";
+import { getSessionOrRedirect } from "@/lib/session";
+import { redirect } from "next/navigation";
 import { getRagSettings } from "../actions/settingActions";
 import { SettingsClient } from "./SettingsClient";
 import { Settings } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
+  const session = await getSessionOrRedirect();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true },
+  });
+
+  if (!dbUser) redirect("/login");
+  if (!canManageSettings(dbUser.role)) redirect("/");
+
   const ragSettings = await getRagSettings();
 
   return (

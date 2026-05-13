@@ -1,7 +1,25 @@
-"use server"
+"use server";
 
+import { canManageSettings } from "@/lib/access";
+import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+
+async function requireSettingsManager() {
+  const session = await getSession();
+  if (!session?.userId) {
+    throw new Error("Oturum gerekli.");
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true },
+  });
+
+  if (!dbUser || !canManageSettings(dbUser.role)) {
+    throw new Error("Bu işlem için yetkiniz yok.");
+  }
+}
 
 export async function getRagSettings() {
   const amberSetting = await prisma.systemSetting.findUnique({ where: { key: 'RAG_AMBER_THRESHOLD' } });
@@ -22,6 +40,8 @@ export async function getRagSettings() {
 }
 
 export async function updateRagSettings(amber: number, red: number) {
+  await requireSettingsManager();
+
   await prisma.systemSetting.upsert({
     where: { key: 'RAG_AMBER_THRESHOLD' },
     update: { value: amber.toString() },

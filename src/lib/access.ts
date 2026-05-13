@@ -13,6 +13,10 @@ export function isOrgWideRole(role: string | undefined): boolean {
   return (ORG_WIDE_ROLES as readonly string[]).includes(role);
 }
 
+export function canManageSettings(role: string | undefined): boolean {
+  return role === "ADMIN" || role === "PMO";
+}
+
 /** Kurum geneli değil, `departmentId` atanmış ve rol departman verisi görebilir. */
 export function usesDepartmentalDataScope(
   role: string | undefined,
