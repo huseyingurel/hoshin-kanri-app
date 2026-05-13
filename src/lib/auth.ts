@@ -1,7 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-const secretKey = "hoshin-kanri-secret-key-123456789";
+const secretKey = process.env.SESSION_SECRET;
+
+if (!secretKey) {
+  throw new Error("SESSION_SECRET environment variable is required for session encryption.");
+}
+
 const key = new TextEncoder().encode(secretKey);
 
 export type SessionPayload = {
