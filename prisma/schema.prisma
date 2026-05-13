@@ -31,7 +31,7 @@ model User {
   name           String
   email          String   @unique
   password       String?
-  role           String   @default("USER") // ADMIN, PMO, EXECUTIVE, DEPT_HEAD, KPI_OWNER
+  role           String   @default("USER") // ADMIN, PMO, EXECUTIVE (kurum geneli); DEPT_HEAD, KPI_OWNER, USER + departmentId → departman KPI/plan kapsamı (uygulama: access.ts / dataScope.ts)
   departmentId   String?
   department     Department? @relation(fields: [departmentId], references: [id])
   

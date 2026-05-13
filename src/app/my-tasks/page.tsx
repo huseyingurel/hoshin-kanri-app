@@ -1,21 +1,35 @@
-import { PrismaClient } from "@prisma/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import prisma from "@/lib/prisma";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, AlertCircle, Calendar, Clock } from "lucide-react";
-
-const prisma = new PrismaClient();
+import { getSessionOrRedirect } from "@/lib/session";
+import { actionPlanMyTasksFilter, countermeasureMyTasksFilter, type UserScope } from "@/lib/dataScope";
+import { redirect } from "next/navigation";
 
 export default async function MyTasksPage() {
+  const session = await getSessionOrRedirect();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  if (!dbUser) redirect("/login");
+
+  const scope: UserScope = {
+    id: dbUser.id,
+    role: dbUser.role,
+    departmentId: dbUser.departmentId,
+  };
+
   const countermeasures = await prisma.countermeasure.findMany({
-    where: { status: 'OPEN' },
+    where: countermeasureMyTasksFilter(scope),
     include: { kpi: true, ownerUser: true },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: "desc" },
   });
 
   const actionPlans = await prisma.actionPlan.findMany({
-    where: { status: { in: ['NOT_STARTED', 'IN_PROGRESS'] } },
+    where: actionPlanMyTasksFilter(scope),
     include: { majorTask: true, responsibleDept: true },
-    orderBy: { dueDate: 'asc' }
+    orderBy: { dueDate: "asc" },
   });
 
   return (
@@ -29,20 +43,19 @@ export default async function MyTasksPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Aksiyon Planları */}
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-semibold flex items-center gap-2 text-zinc-200">
             <Clock className="text-indigo-400" size={20} /> Bekleyen Aksiyon Planları
           </h2>
-          {actionPlans.map(plan => (
+          {actionPlans.map((plan) => (
             <Card key={plan.id} className="bg-zinc-950 border-zinc-800">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
-                    {plan.status === 'IN_PROGRESS' ? 'Devam Ediyor' : 'Başlamadı'}
+                    {plan.status === "IN_PROGRESS" ? "Devam Ediyor" : "Başlamadı"}
                   </Badge>
                   <span className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Calendar size={12} /> {plan.dueDate ? new Date(plan.dueDate).toLocaleDateString('tr-TR') : '-'}
+                    <Calendar size={12} /> {plan.dueDate ? new Date(plan.dueDate).toLocaleDateString("tr-TR") : "-"}
                   </span>
                 </div>
                 <CardTitle className="text-base mt-2">{plan.title}</CardTitle>
@@ -60,18 +73,17 @@ export default async function MyTasksPage() {
           {actionPlans.length === 0 && <p className="text-zinc-500 text-sm">Bekleyen aksiyon planınız bulunmuyor.</p>}
         </div>
 
-        {/* Countermeasures */}
         <div className="flex flex-col gap-4">
           <h2 className="text-xl font-semibold flex items-center gap-2 text-zinc-200">
             <AlertCircle className="text-amber-500" size={20} /> Açık Karşı Önlemler (A3)
           </h2>
-          {countermeasures.map(cm => (
+          {countermeasures.map((cm) => (
             <Card key={cm.id} className="bg-zinc-950 border-amber-500/30">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <Badge className="bg-amber-500 hover:bg-amber-600">Açık Karşı Önlem</Badge>
                   <span className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Calendar size={12} /> {cm.dueDate ? new Date(cm.dueDate).toLocaleDateString('tr-TR') : '-'}
+                    <Calendar size={12} /> {cm.dueDate ? new Date(cm.dueDate).toLocaleDateString("tr-TR") : "-"}
                   </span>
                 </div>
                 <CardTitle className="text-base mt-2">{cm.problemStatement}</CardTitle>

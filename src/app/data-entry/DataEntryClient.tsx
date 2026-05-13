@@ -47,8 +47,12 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
     setLoading(kpiId);
     try {
       const dateObj = new Date(`${selectedDate}-01`);
-      await saveKpiRecord(kpiId, targetVal, actualVal, dateObj, data.comment || "");
-      
+      const result = await saveKpiRecord(kpiId, targetVal, actualVal, dateObj, data.comment || "");
+      if (!result.success) {
+        alert(result.error);
+        return;
+      }
+
       // Kaydedilen inputu temizle
       setInputs(prev => {
         const next = { ...prev };

@@ -1,24 +1,43 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { BarChart2, Target, AlertCircle } from "lucide-react";
+import { getSessionOrRedirect } from "@/lib/session";
+import { kpiScopeFilter, type UserScope } from "@/lib/dataScope";
+import { isOrgWideRole } from "@/lib/access";
+import { redirect } from "next/navigation";
 
-const prisma = new PrismaClient();
+export const dynamic = "force-dynamic";
 
 export default async function KpiBowlingChart() {
+  const session = await getSessionOrRedirect();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  if (!dbUser) redirect("/login");
+
+  const scope: UserScope = {
+    id: dbUser.id,
+    role: dbUser.role,
+    departmentId: dbUser.departmentId,
+  };
+  const kWhere = kpiScopeFilter(scope);
+  const orgWide = isOrgWideRole(session.role);
+
   const kpis = await prisma.kPI.findMany({
+    ...(kWhere ? { where: kWhere } : {}),
     include: {
       responsibleDept: true,
       periodRecords: {
-        orderBy: { periodStart: 'asc' }
-      }
-    }
+        orderBy: { periodStart: "asc" },
+      },
+    },
   });
 
-  // Ay isimleri formatlama (mock için basitleştirilmiş)
   const getMonthName = (date: Date) => {
-    return new Intl.DateTimeFormat('tr-TR', { month: 'short' }).format(new Date(date));
+    return new Intl.DateTimeFormat("tr-TR", { month: "short" }).format(new Date(date));
   };
 
   return (
@@ -28,7 +47,11 @@ export default async function KpiBowlingChart() {
           <BarChart2 className="text-emerald-500" />
           KPI & Bowling Chart
         </h1>
-        <p className="text-zinc-400 mt-2">Dönemsel performans ölçümleri ve hedef sapmaları</p>
+        <p className="text-zinc-400 mt-2">
+          {orgWide
+            ? "Dönemsel performans ölçümleri ve hedef sapmaları"
+            : "Yalnızca erişim kapsamınızdaki KPI'lar için dönemsel görünüm."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-6">
@@ -41,12 +64,17 @@ export default async function KpiBowlingChart() {
                   {kpi.name}
                 </CardTitle>
                 <CardDescription className="mt-1 flex gap-2">
-                  <span>Hedef: <strong>{kpi.targetYear}{kpi.unit}</strong></span>
+                  <span>
+                    Hedef: <strong>{kpi.targetYear}</strong>
+                    {kpi.unit}
+                  </span>
                   <span>•</span>
-                  <span>Sorumlu: {kpi.responsibleDept?.name || 'Belirtilmedi'}</span>
+                  <span>Sorumlu: {kpi.responsibleDept?.name || "Belirtilmedi"}</span>
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="bg-zinc-900">{kpi.reportingFrequency}</Badge>
+              <Badge variant="outline" className="bg-zinc-900">
+                {kpi.reportingFrequency}
+              </Badge>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="rounded-md border border-zinc-800 overflow-hidden">
@@ -64,28 +92,38 @@ export default async function KpiBowlingChart() {
                   <TableBody>
                     {kpi.periodRecords.map((record) => (
                       <TableRow key={record.id} className="border-zinc-800">
-                        <TableCell className="font-medium text-zinc-300">
-                          {getMonthName(record.periodStart)}
+                        <TableCell className="font-medium text-zinc-300">{getMonthName(record.periodStart)}</TableCell>
+                        <TableCell className="text-right text-zinc-400">
+                          {record.targetValue}
+                          {kpi.unit}
                         </TableCell>
-                        <TableCell className="text-right text-zinc-400">{record.targetValue}{kpi.unit}</TableCell>
                         <TableCell className="text-right font-medium text-zinc-200">
-                          {record.actualValue}{kpi.unit}
+                          {record.actualValue}
+                          {kpi.unit}
                         </TableCell>
                         <TableCell className="text-right text-zinc-400">
-                          {record.variance ? (
+                          {record.variance != null ? (
                             <span className={record.variance > 0 ? "text-rose-400" : "text-emerald-400"}>
-                              {record.variance > 0 ? '+' : ''}{record.variance}{kpi.unit}
+                              {record.variance > 0 ? "+" : ""}
+                              {record.variance}
+                              {kpi.unit}
                             </span>
-                          ) : '-'}
+                          ) : (
+                            "-"
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {record.statusColor === 'GREEN' && <Badge className="bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30">Hedefte</Badge>}
-                          {record.statusColor === 'RED' && <Badge className="bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 border-rose-500/50">Kritik</Badge>}
-                          {record.statusColor === 'AMBER' && <Badge className="bg-amber-500/20 text-amber-500 hover:bg-amber-500/30">Riskli</Badge>}
+                          {record.statusColor === "GREEN" && (
+                            <Badge className="bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30">Hedefte</Badge>
+                          )}
+                          {record.statusColor === "RED" && (
+                            <Badge className="bg-rose-500/20 text-rose-500 hover:bg-rose-500/30 border-rose-500/50">Kritik</Badge>
+                          )}
+                          {record.statusColor === "AMBER" && (
+                            <Badge className="bg-amber-500/20 text-amber-500 hover:bg-amber-500/30">Riskli</Badge>
+                          )}
                         </TableCell>
-                        <TableCell className="text-sm text-zinc-400">
-                          {record.ownerComment || '-'}
-                        </TableCell>
+                        <TableCell className="text-sm text-zinc-400">{record.ownerComment || "-"}</TableCell>
                       </TableRow>
                     ))}
                     {kpi.periodRecords.length === 0 && (
@@ -98,19 +136,25 @@ export default async function KpiBowlingChart() {
                   </TableBody>
                 </Table>
               </div>
-              
-              {kpi.periodRecords.some(r => r.statusColor === 'RED') && (
+
+              {kpi.periodRecords.some((r) => r.statusColor === "RED") && (
                 <div className="mt-4 p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-start gap-3">
                   <AlertCircle className="text-rose-500 shrink-0" size={20} />
                   <div>
                     <h4 className="text-rose-400 font-medium mb-1">Karşı Önlem (Countermeasure) Gerekli</h4>
-                    <p className="text-sm text-rose-400/80">Bu KPI'da hedef sapması yaşandı. İlgili dönemler için problem analizi ve karşı aksiyonların sisteme girilmesi gerekmektedir.</p>
+                    <p className="text-sm text-rose-400/80">
+                      Bu KPI'da hedef sapması yaşandı. İlgili dönemler için problem analizi ve karşı aksiyonların
+                      sisteme girilmesi gerekmektedir.
+                    </p>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
         ))}
+        {kpis.length === 0 && (
+          <p className="text-zinc-500 text-center py-12">Kapsamınızda görüntülenecek KPI yok.</p>
+        )}
       </div>
     </div>
   );

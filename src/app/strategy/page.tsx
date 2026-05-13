@@ -1,12 +1,32 @@
 import prisma from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Target, ArrowRight, Layers, FileText } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Target, Layers, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { getSessionOrRedirect } from "@/lib/session";
+import { hoshinScopeFilter, type UserScope } from "@/lib/dataScope";
+import { isOrgWideRole } from "@/lib/access";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function StrategyTree() {
+  const session = await getSessionOrRedirect();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  if (!dbUser) redirect("/login");
+
+  const scope: UserScope = {
+    id: dbUser.id,
+    role: dbUser.role,
+    departmentId: dbUser.departmentId,
+  };
+  const hWhere = hoshinScopeFilter(scope);
+  const orgWide = isOrgWideRole(session.role);
+
   const hoshins = await prisma.hoshin.findMany({
+    ...(hWhere ? { where: hWhere } : {}),
     include: {
       majorTasks: {
         include: {
@@ -14,11 +34,11 @@ export default async function StrategyTree() {
             include: {
               kpis: true,
               responsibleDept: true,
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 
   return (
@@ -28,7 +48,11 @@ export default async function StrategyTree() {
           <Target className="text-emerald-500" />
           Strategy Tree (Hoshin Yayılımı)
         </h1>
-        <p className="text-zinc-400 mt-2">Vizyondan aksiyonlara uzanan strateji haritası</p>
+        <p className="text-zinc-400 mt-2">
+          {orgWide
+            ? "Vizyondan aksiyonlara uzanan strateji haritası"
+            : "Yalnızca sorumluluğunuzda olan aksiyon planları ve KPI bağlantılarını gösterir."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-8">

@@ -2,18 +2,36 @@ import prisma from "@/lib/prisma";
 import { DataEntryClient } from "./DataEntryClient";
 import { FileEdit } from "lucide-react";
 import { getRagSettings } from "../actions/settingActions";
+import { getSessionOrRedirect } from "@/lib/session";
+import { kpiScopeFilter, type UserScope } from "@/lib/dataScope";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function DataEntryPage() {
+  const session = await getSessionOrRedirect();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  if (!dbUser) redirect("/login");
+
+  const scope: UserScope = {
+    id: dbUser.id,
+    role: dbUser.role,
+    departmentId: dbUser.departmentId,
+  };
+  const kWhere = kpiScopeFilter(scope);
+
   const kpis = await prisma.kPI.findMany({
+    ...(kWhere ? { where: kWhere } : {}),
     select: {
       id: true,
       name: true,
       unit: true,
       targetYear: true,
     },
-    orderBy: { name: 'asc' }
+    orderBy: { name: "asc" },
   });
 
   const settings = await getRagSettings();

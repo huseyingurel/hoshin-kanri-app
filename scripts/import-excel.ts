@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import * as xlsx from 'xlsx';
-
-const prisma = new PrismaClient();
+import prisma from "../src/lib/prisma";
+import * as xlsx from "xlsx";
 
 async function main() {
   console.log("🚀 Veri aktarımı başlatılıyor...");

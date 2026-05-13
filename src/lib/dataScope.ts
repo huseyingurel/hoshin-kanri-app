@@ -1,0 +1,86 @@
+import type { Prisma } from "@prisma/client";
+import { isOrgWideRole, usesDepartmentalDataScope } from "@/lib/access";
+
+export type UserScope = {
+  id: string;
+  role: string;
+  departmentId: string | null;
+};
+
+/** KPI'lar: sahip veya (USER / KPI_OWNER / DEPT_HEAD + departmentId) aynı sorumlu departman. */
+export function personalKpiScopeFilter(u: UserScope): Prisma.KPIWhereInput {
+  const or: Prisma.KPIWhereInput[] = [{ ownerUserId: u.id }];
+  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+    or.push({ responsibleDeptId: u.departmentId });
+  }
+  return { OR: or };
+}
+
+/** Dashboard / rapor: kurum geneli rollerde filtre yok. */
+export function kpiScopeFilter(u: UserScope): Prisma.KPIWhereInput | undefined {
+  if (isOrgWideRole(u.role)) return undefined;
+  return personalKpiScopeFilter(u);
+}
+
+export function hoshinScopeFilter(u: UserScope): Prisma.HoshinWhereInput | undefined {
+  if (isOrgWideRole(u.role)) return undefined;
+  const apOr: Prisma.ActionPlanWhereInput[] = [
+    { ownerUserId: u.id },
+    { kpis: { some: { ownerUserId: u.id } } },
+  ];
+  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+    apOr.push({ responsibleDeptId: u.departmentId });
+    apOr.push({ kpis: { some: { responsibleDeptId: u.departmentId } } } );
+  }
+  return {
+    majorTasks: {
+      some: {
+        actionPlans: { some: { OR: apOr } },
+      },
+    },
+  };
+}
+
+export function countermeasureOpenScopeFilter(u: UserScope): Prisma.CountermeasureWhereInput {
+  const base: Prisma.CountermeasureWhereInput = { status: "OPEN" };
+  const kpiFilter = kpiScopeFilter(u);
+  if (!kpiFilter) return base;
+  return {
+    AND: [
+      base,
+      {
+        OR: [{ ownerUserId: u.id }, { kpi: kpiFilter }],
+      },
+    ],
+  };
+}
+
+export function actionPlanMyTasksFilter(u: UserScope): Prisma.ActionPlanWhereInput {
+  const or: Prisma.ActionPlanWhereInput[] = [{ ownerUserId: u.id }];
+  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+    or.push({ responsibleDeptId: u.departmentId });
+  }
+  return {
+    status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+    OR: or,
+  };
+}
+
+export function countermeasureMyTasksFilter(u: UserScope): Prisma.CountermeasureWhereInput {
+  const or: Prisma.CountermeasureWhereInput[] = [{ ownerUserId: u.id }];
+  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+    or.push({ kpi: { responsibleDeptId: u.departmentId } });
+  }
+  return {
+    status: "OPEN",
+    OR: or,
+  };
+}
+
+/** Karşı önlemler listesi: kurum geneli hariç sahip veya kapsamdaki KPI ile ilişkili kayıtlar. */
+export function countermeasureListScopeFilter(u: UserScope): Prisma.CountermeasureWhereInput | undefined {
+  if (isOrgWideRole(u.role)) return undefined;
+  return {
+    OR: [{ ownerUserId: u.id }, { kpi: personalKpiScopeFilter(u) }],
+  };
+}

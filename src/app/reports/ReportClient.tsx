@@ -5,7 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, Activity, Target, AlertTriangle, FileText } from "lucide-react";
 
-export function ReportClient({ stats, hoshinProgress, topCriticalKpis, recentDecisions }: any) {
+export function ReportClient({
+  stats,
+  hoshinProgress,
+  topCriticalKpis,
+  recentDecisions,
+  reportScope = "org",
+}: {
+  stats: { green: number; amber: number; red: number };
+  hoshinProgress: { name: string; progress: number }[];
+  topCriticalKpis: unknown[];
+  recentDecisions: unknown[];
+  reportScope?: "org" | "personal";
+}) {
   const handlePrint = () => {
     window.print();
   };
@@ -28,7 +40,14 @@ export function ReportClient({ stats, hoshinProgress, topCriticalKpis, recentDec
         <div className="border-b-2 border-black pb-4 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tight">Hoshin Kanri</h1>
-            <h2 className="text-xl font-bold text-gray-600 mt-1">İcra Kurulu Aylık Durum Özeti (One-Pager)</h2>
+            <h2 className="text-xl font-bold text-gray-600 mt-1">
+              {reportScope === "org"
+                ? "İcra Kurulu Aylık Durum Özeti (One-Pager)"
+                : "Kişisel / Sorumluluk Alanı Özeti"}
+            </h2>
+            {reportScope === "personal" && (
+              <p className="text-xs text-gray-500 mt-1">Kapsam: yalnızca erişiminiz olan KPI ve kararlar.</p>
+            )}
           </div>
           <div className="text-right">
             <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Rapor Tarihi</div>
@@ -40,7 +59,7 @@ export function ReportClient({ stats, hoshinProgress, topCriticalKpis, recentDec
         <div className="grid grid-cols-2 gap-6">
           <div className="flex flex-col gap-2">
             <h3 className="font-bold text-lg border-b border-gray-300 pb-1 flex items-center gap-2">
-              <Activity size={18} /> Şirket Genel Sağlığı
+              <Activity size={18} /> {reportScope === "org" ? "Şirket Genel Sağlığı" : "KPI Sağlığı (Kapsamınız)"}
             </h3>
             <div className="grid grid-cols-3 gap-2 mt-2">
               <div className="bg-green-100 border border-green-300 p-3 rounded-md text-center">
