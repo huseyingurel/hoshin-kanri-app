@@ -126,6 +126,8 @@ describe("runDailySweep (entegrasyon)", () => {
       where: { type: "OVERDUE_FOLLOWUP", countermeasureId: cm.id },
     });
     expect(followup).toMatchObject({ escalationLevel: 1, assigneeId: seed.ownerId });
+    // G7: takip görevi kaynağın (geçmiş) vadesini taşımalı ki gündemde "vadesi geçmiş" görünsün.
+    expect(followup.dueDate).toEqual(new Date(Date.UTC(2020, 0, 1)));
     const notifs = await prisma.notificationLog.findMany({ where: { type: "CM_OVERDUE" } });
     expect(notifs.map((n) => n.userId).sort()).toEqual([seed.ownerId, seed.managerId].sort());
   });

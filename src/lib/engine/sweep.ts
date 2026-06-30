@@ -321,6 +321,9 @@ export async function runDailySweep({ now = new Date() }: { now?: Date } = {}): 
             title: "Vadesi geçen karşı önlem takibi",
             priority: "HIGH",
             escalationLevel: 1,
+            // Kaynağın (geçmiş) vadesini taşı: takip görevi de gündemde "vadesi geçmiş" olarak
+            // görünsün (G7). Aksi halde dueDate=null kalır ve gündem sorgusuna hiç girmez.
+            dueDate: cm.dueDate,
             assigneeId: cm.ownerUserId,
             links: { countermeasureId: cm.id, kpiId: cm.kpiId },
           });
@@ -377,6 +380,8 @@ export async function runDailySweep({ now = new Date() }: { now?: Date } = {}): 
             title: "Vadesi geçen karar takibi",
             priority: "HIGH",
             escalationLevel: 1,
+            // Kaynağın (geçmiş) vadesini taşı → gündemde "vadesi geçmiş" olarak görünür (G7).
+            dueDate: d.dueDate,
             assigneeId: d.assigneeId,
             links: { decisionId: d.id, kpiId: d.kpiId, actionPlanId: d.actionPlanId },
           });
