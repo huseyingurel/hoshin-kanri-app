@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canManageSettings } from "@/lib/access";
 import { getUnreadCount } from "./actions/notificationActions";
+import { logEvent } from "@/lib/log";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,16 +21,25 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   // Kenar çubuğu rozeti + denetim menüsü için oturum bağlamı (oturum yoksa güvenli varsayılan).
-  const session = await getSession();
+  // Bunlar yardımcı süslemelerdir: kök layout her rotada çalıştığından, buradaki bir DB hatası
+  // tüm uygulamayı düşürmemeli. Hata sessizce yutulmaz — loglanır (INV-7) — ama güvenli
+  // varsayılanlarla (rozet gizli, denetim menüsü gizli) render edilir.
   let unreadCount = 0;
   let canViewAudit = false;
-  if (session?.userId) {
-    unreadCount = await getUnreadCount();
-    const dbUser = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { role: true },
+  try {
+    const session = await getSession();
+    if (session?.userId) {
+      unreadCount = await getUnreadCount();
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { role: true },
+      });
+      canViewAudit = canManageSettings(dbUser?.role);
+    }
+  } catch (e) {
+    logEvent("error", "layout.context.failed", {
+      message: e instanceof Error ? e.message : String(e),
     });
-    canViewAudit = canManageSettings(dbUser?.role);
   }
 
   return (
