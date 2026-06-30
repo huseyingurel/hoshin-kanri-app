@@ -15,7 +15,8 @@ import {
   LogOut,
   BookOpen,
   Bell,
-  History
+  History,
+  Upload
 } from "lucide-react";
 
 export function Sidebar({ unreadCount = 0, canViewAudit = false }: { unreadCount?: number; canViewAudit?: boolean }) {
@@ -68,6 +69,10 @@ export function Sidebar({ unreadCount = 0, canViewAudit = false }: { unreadCount
         <Link href="/reports" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
           <FileText size={20} />
           <span>Rapor Merkezi</span>
+        </Link>
+        <Link href="/import" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
+          <Upload size={20} />
+          <span>Veri İçe Aktar</span>
         </Link>
                 <Link href="/help" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
             <BookOpen size={20} />
