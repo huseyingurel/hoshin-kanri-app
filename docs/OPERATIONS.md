@@ -16,6 +16,7 @@ Copy `.env.example` to `.env` and fill in:
 | `DATABASE_URL` | Postgres connection used by Prisma at runtime (pooled URL in prod). |
 | `DIRECT_URL` | Direct Postgres connection used for migrations (`prisma db push`). |
 | `SESSION_SECRET` | HMAC key for signing session JWTs (`src/lib/auth.ts` throws if unset). |
+| `CRON_SECRET` | Bearer token the daily governance sweep endpoint requires (see below). If unset, `POST /api/cron/sweep` **fails closed** (500) — it never runs unauthenticated. |
 
 For local dev both URLs point at the throwaway Docker Postgres below.
 
@@ -100,6 +101,69 @@ read/query access to the prod project for inspection (schema, row counts, adviso
 Project-scoped MCP servers require one-time approval on Claude Code startup, then
 OAuth authentication via `/mcp`. Prefer it for **inspecting** prod; use Method A/B for
 moving data.
+
+## Governance engine — daily sweep (cron)
+
+The time-driven half of the governance layer (period openings, due-soon / overdue
+follow-ups, RED-KPI review tasks, level-2 escalations) runs as an **idempotent daily
+sweep** behind a bearer-protected route. There is **no in-process scheduler** — an
+external scheduler must POST to the endpoint (N7).
+
+```bash
+curl -X POST https://<host>/api/cron/sweep \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+- **Auth (fail-closed, INV-7):** the route returns **401** on a missing/wrong bearer and
+  **500** if `CRON_SECRET` is unset server-side. It never runs unauthenticated.
+- **Response:** a structured JSON summary —
+  `{ ranAt, scanned, generated, notified, escalated, skipped, failures[] }`. A non-empty
+  `failures[]` means individual work items threw; each runs in its **own transaction**, so
+  one failure never rolls back the others (it is reported, not swallowed).
+- **Retry / re-run semantics (INV-2/INV-3):** every task and notification write is keyed by
+  a unique `dedupeKey`, so re-running the sweep any number of times per day is safe —
+  the second run reports `generated: 0` and counts the existing rows under `skipped`. A
+  scheduler that retries on a non-200 (or double-fires) cannot create duplicates.
+- **Scheduling:** wire any external trigger to fire it ~once/day, e.g. a **Vercel Cron**
+  entry (`vercel.json` → `crons`) hitting `/api/cron/sweep`, with `CRON_SECRET` set in the
+  project env. Frequency only affects latency of follow-ups, not correctness (idempotent).
+
+Local smoke test (against the dev server on port 3001):
+```bash
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3001/api/cron/sweep
+# run twice — the second call should show generated:0, skipped:>0
+```
+
+## Tests
+
+```bash
+npm test            # Tier 1 — unit (pure engine + RAG): no DB needed
+npm run test:int    # Tier 2 — integration (.itest.ts): requires a test Postgres
+npm run test:all    # both, in sequence
+```
+
+**Test database.** Integration tests run against a **separate** `hoshin_test` database so
+they never touch dev/prod data. Configure it in `.env.test` (gitignored; copy from
+`.env.test.example`):
+
+```
+DATABASE_URL=postgresql://hoshin:hoshin@localhost:5433/hoshin_test?schema=public
+DIRECT_URL=postgresql://hoshin:hoshin@localhost:5433/hoshin_test?schema=public
+SESSION_SECRET=test-secret
+CRON_SECRET=test-cron-secret
+```
+
+Create the DB once (reuses the Docker Postgres from above):
+```bash
+docker exec hoshin-pg psql -U hoshin -d hoshin -c 'CREATE DATABASE hoshin_test;'
+```
+
+How the harness isolates state (no manual setup beyond the DB):
+- **`test/integration.globalSetup.ts`** runs `prisma db push` against `hoshin_test` **once**
+  before the suite (no migration history — N5; `db push` is idempotent).
+- **`test/integration.setup.ts`** `TRUNCATE … RESTART IDENTITY CASCADE`s every `public`
+  table **before each test** (table list read from `pg_tables`, so adding a model needs no
+  edit here). Tests run serially (`fileParallelism: false`) since they share one DB.
 
 ## Security
 
