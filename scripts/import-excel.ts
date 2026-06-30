@@ -1,5 +1,22 @@
 import prisma from "../src/lib/prisma";
+import { REPORTING_FREQUENCIES } from "../src/lib/domainTypes";
+import { normalizeReportingFrequency } from "../src/lib/engine/calendar";
 import * as xlsx from "xlsx";
+
+/**
+ * Excel'deki serbest-metin "Reporting Frequency" değerini şemayla uyumlu sıklığa çevirir.
+ * Tanınmayan değerde sessizce QUARTERLY'ye düşmek yerine MONTHLY (şema varsayılanı) döner
+ * ve uyarı basar — böylece HALF_YEAR/ANNUAL kaybolmaz, hatalı veri görünür kalır.
+ */
+function resolveReportingFrequency(raw: string) {
+  const normalized = normalizeReportingFrequency(raw);
+  if (normalized) return normalized;
+  console.warn(
+    `⚠️  Tanınmayan raporlama sıklığı "${raw}" → MONTHLY varsayıldı ` +
+      `(geçerli değerler: ${REPORTING_FREQUENCIES.join(", ")} veya yaygın yazımları).`,
+  );
+  return "MONTHLY" as const;
+}
 
 async function main() {
   console.log("🚀 Veri aktarımı başlatılıyor...");
@@ -109,7 +126,7 @@ async function main() {
         name: kpiName,
         unit: unit,
         targetYear: targetValue,
-        reportingFrequency: freq === 'Monthly' ? 'MONTHLY' : 'QUARTERLY',
+        reportingFrequency: resolveReportingFrequency(freq),
         actionPlanId: actionPlan.id,
         responsibleDeptId: depts[0].id
       }

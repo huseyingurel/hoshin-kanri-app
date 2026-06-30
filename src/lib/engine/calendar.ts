@@ -20,6 +20,41 @@ export function parseFrequency(raw: string): ReportingFrequency {
   throw new Error(`Bilinmeyen raporlama sıklığı: ${raw}`);
 }
 
+/**
+ * Serbest-metin bir sıklık değerini (İngilizce/Türkçe yaygın yazımlar) şemayla uyumlu
+ * bir raporlama sıklığına çevirir. Tanınmazsa **null** döner — çağıran taraf kararı verir
+ * (sessiz dönüş yok; ör. Excel içe aktarımı uyarı basıp varsayılana düşer). `parseFrequency`
+ * kesin eşleşme bekler; bu ise yazım toleranslıdır.
+ */
+export function normalizeReportingFrequency(raw: string): ReportingFrequency | null {
+  const key = raw.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  const map: Record<string, ReportingFrequency> = {
+    monthly: "MONTHLY",
+    aylik: "MONTHLY",
+    aylık: "MONTHLY",
+    quarterly: "QUARTERLY",
+    ceyrek: "QUARTERLY",
+    çeyrek: "QUARTERLY",
+    ucaylik: "QUARTERLY",
+    üçaylık: "QUARTERLY",
+    halfyearly: "HALF_YEAR",
+    halfyear: "HALF_YEAR",
+    semiannual: "HALF_YEAR",
+    semiannually: "HALF_YEAR",
+    biannual: "HALF_YEAR",
+    yariyil: "HALF_YEAR",
+    yarıyıl: "HALF_YEAR",
+    altiaylik: "HALF_YEAR",
+    altıaylık: "HALF_YEAR",
+    annual: "ANNUAL",
+    annually: "ANNUAL",
+    yearly: "ANNUAL",
+    yillik: "ANNUAL",
+    yıllık: "ANNUAL",
+  };
+  return map[key] ?? null;
+}
+
 /** Bir yıldaki dönem sayısı (MONTHLY 12, QUARTERLY 4, HALF_YEAR 2, ANNUAL 1). */
 export function periodsPerYear(frequency: ReportingFrequency): number {
   switch (frequency) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   duePeriodsAsOf,
+  normalizeReportingFrequency,
   parseFrequency,
   periodKeyFor,
   periodsPerYear,
@@ -123,5 +124,34 @@ describe("parseFrequency", () => {
   it("geçersiz sıklıkta fırlatır (sessiz dönüş yok)", () => {
     expect(() => parseFrequency("WEEKLY")).toThrow();
     expect(() => parseFrequency("")).toThrow();
+  });
+});
+
+describe("normalizeReportingFrequency", () => {
+  it("dört sıklığın da yaygın İngilizce yazımlarını eşler", () => {
+    expect(normalizeReportingFrequency("Monthly")).toBe("MONTHLY");
+    expect(normalizeReportingFrequency("Quarterly")).toBe("QUARTERLY");
+    expect(normalizeReportingFrequency("Half-Yearly")).toBe("HALF_YEAR");
+    expect(normalizeReportingFrequency("Semi-Annual")).toBe("HALF_YEAR");
+    expect(normalizeReportingFrequency("Annual")).toBe("ANNUAL");
+    expect(normalizeReportingFrequency("Yearly")).toBe("ANNUAL");
+  });
+
+  it("Türkçe yazımları ve büyük/küçük harf + boşluk farklarını tolere eder", () => {
+    expect(normalizeReportingFrequency("aylık")).toBe("MONTHLY");
+    expect(normalizeReportingFrequency("Üç Aylık")).toBe("QUARTERLY");
+    expect(normalizeReportingFrequency(" YARIYIL ")).toBe("HALF_YEAR");
+    expect(normalizeReportingFrequency("Yıllık")).toBe("ANNUAL");
+  });
+
+  it("HALF_YEAR / ANNUAL artık QUARTERLY'ye sessizce düşmez (FR-13)", () => {
+    expect(normalizeReportingFrequency("ANNUAL")).toBe("ANNUAL");
+    expect(normalizeReportingFrequency("HALF_YEAR")).toBe("HALF_YEAR");
+  });
+
+  it("tanınmayan değerde null döner (çağıran karar verir, sessiz coercion yok)", () => {
+    expect(normalizeReportingFrequency("Weekly")).toBeNull();
+    expect(normalizeReportingFrequency("")).toBeNull();
+    expect(normalizeReportingFrequency("zırva")).toBeNull();
   });
 });
