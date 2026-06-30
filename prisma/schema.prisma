@@ -22,6 +22,7 @@ model Department {
   users       User[]
   actionPlans ActionPlan[]
   kpis        KPI[]
+  tasksAssigned Task[]   @relation("TaskAssigneeDept")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -44,7 +45,14 @@ model User {
   decisionsAssigned    Decision[] @relation("DecisionAssignee")
 
   departmentHeadOf     Department[] @relation("DepartmentHead")
-  
+
+  // Yönetişim katmanı geri ilişkileri
+  tasksAssigned        Task[]            @relation("TaskAssignee")
+  notifications        NotificationLog[] @relation("NotificationRecipient")
+  auditLogs            AuditLog[]        @relation("AuditActor")
+  catchballFrom        CatchballItem[]   @relation("CatchballFrom")
+  catchballTo          CatchballItem[]   @relation("CatchballTo")
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -56,9 +64,10 @@ model Hoshin {
   year            Int
   type            String   // BREAKTHROUGH, ANNUAL
   status          String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  catchballStatus String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
   sponsorUserId   String?
   sponsorUser     User?    @relation("HoshinSponsor", fields: [sponsorUserId], references: [id])
-  
+
   majorTasks      MajorTask[]
 
   createdAt       DateTime @default(now())
@@ -73,9 +82,10 @@ model MajorTask {
   description          String?
   priority             String   @default("MEDIUM") // HIGH, MEDIUM, LOW
   status               String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED
+  catchballStatus      String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
   hoshinId             String
   hoshin               Hoshin   @relation(fields: [hoshinId], references: [id], onDelete: Cascade)
-  
+
   actionPlans          ActionPlan[]
 
   createdAt            DateTime @default(now())
@@ -90,7 +100,8 @@ model ActionPlan {
   dueDate              DateTime?
   progressPercent      Int      @default(0)
   status               String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, DELAYED
-  
+  catchballStatus      String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
+
   majorTaskId          String
   majorTask            MajorTask @relation(fields: [majorTaskId], references: [id], onDelete: Cascade)
   
@@ -102,6 +113,7 @@ model ActionPlan {
 
   kpis                 KPI[]
   decisions            Decision[]
+  tasks                Task[]
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -113,8 +125,9 @@ model KPI {
   definition           String?
   unit                 String   // %, #, $, etc.
   targetYear           Float
-  reportingFrequency   String   @default("MONTHLY") // MONTHLY, QUARTERLY
-  
+  reportingFrequency   String   @default("MONTHLY") // REPORTING_FREQUENCIES: MONTHLY, QUARTERLY, HALF_YEAR, ANNUAL
+  catchballStatus      String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
+
   actionPlanId         String?
   actionPlan           ActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
   
@@ -127,6 +140,7 @@ model KPI {
   periodRecords        KPIPeriodRecord[]
   countermeasures      Countermeasure[]
   decisions            Decision[]
+  tasks                Task[]
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -149,6 +163,15 @@ model KPIPeriodRecord {
   submittedBy          User?    @relation("PeriodRecordSubmitter", fields: [submittedById], references: [id])
   submittedAt          DateTime?
 
+  // Dönem kilidi (FR-41) — kilitliyse yalnız ADMIN/PMO reopenPeriod ile değiştirebilir
+  locked               Boolean  @default(false)
+  lockedAt             DateTime?
+  lockedById           String?
+  // Kanıt: yalnız URL/metin; ikili dosya saklama kapsam dışı (N2)
+  evidenceUrl          String?
+
+  tasks                Task[]
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -170,6 +193,8 @@ model Countermeasure {
   status               String   @default("OPEN") // OPEN, IN_PROGRESS, CLOSED
   closureNote          String?
 
+  tasks                Task[]
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -180,10 +205,15 @@ model Review {
   type                 String   // MEETING, EXPERT_REVIEW
   date                 DateTime
   status               String   @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED
-  
+
+  // Toplantı meta verisi (FR-30) — opsiyonel şablon bilgisi
+  frequency            String?  // REPORTING_FREQUENCIES benzeri; opsiyonel
+  chairUserId          String?
+  coordinatorUserId    String?
+
   organizerId          String?
   organizer            User?    @relation("ReviewOrganizer", fields: [organizerId], references: [id])
-  
+
   decisions            Decision[]
   
   createdAt            DateTime @default(now())
@@ -207,7 +237,9 @@ model Decision {
   
   assigneeId           String?
   assignee             User?    @relation("DecisionAssignee", fields: [assigneeId], references: [id])
-  
+
+  tasks                Task[]
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -218,4 +250,104 @@ model SystemSetting {
   value       String
   description String?
   updatedAt   DateTime @updatedAt
+}
+
+// --- Yönetişim katmanı modelleri ---
+
+model Task {
+  id                String   @id @default(cuid())
+  type              String   // TASK_TYPES (domainTypes.ts)
+  title             String
+  description       String?
+  status            String   @default("OPEN")    // TASK_STATUSES
+  priority          String   @default("MEDIUM")  // TASK_PRIORITIES
+  source            String   @default("SYSTEM")   // TASK_SOURCES: SYSTEM | MANUAL
+  dueDate           DateTime?
+  escalationLevel   Int      @default(0)          // 0 yok, 1 yönetici, 2 sponsor/PMO
+  periodKey         String?                       // ör. "2026-M05" / "2026-Q2" (idempotans)
+
+  // SYSTEM görevleri için idempotans anahtarı: "{type}:{entityType}:{entityId}:{periodKey}"
+  dedupeKey         String?  @unique
+
+  assigneeId        String?
+  assignee          User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigneeDeptId    String?
+  assigneeDept      Department? @relation("TaskAssigneeDept", fields: [assigneeDeptId], references: [id])
+
+  // Kaynak varlığa yumuşak bağlar (yalnız ilgili olan(lar) doldurulur)
+  kpiId             String?
+  kpi               KPI?     @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpiPeriodRecordId String?
+  kpiPeriodRecord   KPIPeriodRecord? @relation(fields: [kpiPeriodRecordId], references: [id], onDelete: Cascade)
+  countermeasureId  String?
+  countermeasure    Countermeasure? @relation(fields: [countermeasureId], references: [id], onDelete: Cascade)
+  actionPlanId      String?
+  actionPlan        ActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  decisionId        String?
+  decision          Decision? @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  notifications     NotificationLog[]
+  closedAt          DateTime?
+  closedById        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([assigneeId, status])
+  @@index([assigneeDeptId, status])
+  @@index([status, dueDate])
+}
+
+model NotificationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("NotificationRecipient", fields: [userId], references: [id])
+  type        String   // NOTIFICATION_TYPES
+  title       String
+  body        String?
+  channel     String   @default("IN_APP")  // yalnız IN_APP uygulanır; EMAIL ileride
+  entityType  String?
+  entityId    String?
+  periodKey   String?
+  // İdempotans: "{userId}:{type}:{entityType}:{entityId}:{periodKey}"
+  dedupeKey   String?  @unique
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?                       // null = SYSTEM
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action      String   // AUDIT_ACTIONS
+  entityType  String
+  entityId    String
+  changes     Json?    // [{ field, old, new }, ...] — audit.diff() üretir
+  summary     String?  // okunabilir Türkçe tek satır
+  context     String   // çağrı yeri: "saveKpiRecord" | "sweep" | ...
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+}
+
+model CatchballItem {
+  id              String   @id @default(cuid())
+  entityType      String   // CATCHBALL_ENTITY_TYPES
+  entityId        String
+  type            String   // CATCHBALL_ITEM_TYPES
+  message         String
+  fromUserId      String?
+  fromUser        User?    @relation("CatchballFrom", fields: [fromUserId], references: [id])
+  toUserId        String?
+  toUser          User?    @relation("CatchballTo", fields: [toUserId], references: [id])
+  toRole          String?
+  toDeptId        String?
+  resultingStatus String?  // sonuçta varlığın geçtiği catchballStatus, varsa
+  createdAt       DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
 }
