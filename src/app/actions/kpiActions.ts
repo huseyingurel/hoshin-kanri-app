@@ -9,6 +9,7 @@ import { canManageSettings } from "@/lib/access";
 import {
   computeKpiRagFromVariancePercent,
   computePercentVariance,
+  resolveThresholds,
   shouldAutoOpenCountermeasure,
 } from "@/lib/kpiRag";
 import { diff, recordAudit } from "@/lib/engine/audit";
@@ -26,7 +27,9 @@ export async function saveKpiRecord(
   targetValue: number,
   actualValue: number,
   periodDate: Date,
-  ownerComment: string
+  ownerComment: string,
+  // FR-15: sapma gerekçesi + kanıt bağlantısı (opsiyonel)
+  extra?: { varianceReason?: string | null; evidenceUrl?: string | null }
 ): Promise<SaveKpiRecordResult> {
   const session = await getSession();
   if (!session?.userId) {
@@ -67,6 +70,8 @@ export async function saveKpiRecord(
       ownerUserId: true,
       responsibleDeptId: true,
       reportingFrequency: true,
+      redThreshold: true,
+      amberThreshold: true,
       actionPlan: {
         select: { majorTask: { select: { hoshin: { select: { sponsorUserId: true } } } } },
       },
@@ -79,7 +84,12 @@ export async function saveKpiRecord(
   const variance = actualValue - targetValue;
   const percentVariance = computePercentVariance(actualValue, targetValue);
   const settings = await getRagSettings();
-  const statusColor = computeKpiRagFromVariancePercent(percentVariance, settings);
+  // FR-12: KPI'ya özel eşik varsa varsayılanı ezer.
+  const thresholds = resolveThresholds(
+    { redThreshold: kpi.redThreshold, amberThreshold: kpi.amberThreshold },
+    settings,
+  );
+  const statusColor = computeKpiRagFromVariancePercent(percentVariance, thresholds);
 
   const periodStart = periodDate;
   const periodEnd = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0);
@@ -114,6 +124,8 @@ export async function saveKpiRecord(
           statusColor,
           ownerComment:
             ownerComment || (statusColor !== "GREEN" ? "Sistem: Yorum girilmedi" : ""),
+          varianceReason: extra?.varianceReason?.trim() || null,
+          evidenceUrl: extra?.evidenceUrl?.trim() || null,
           submittedById: session.userId,
           submittedAt: new Date(),
         },

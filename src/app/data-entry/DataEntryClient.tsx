@@ -19,9 +19,9 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [loading, setLoading] = useState<string | null>(null);
   
-  const [inputs, setInputs] = useState<Record<string, { target: string; actual: string; comment: string }>>({});
+  const [inputs, setInputs] = useState<Record<string, { target: string; actual: string; comment: string; reason: string; evidence: string }>>({});
 
-  const handleInputChange = (kpiId: string, field: "target" | "actual" | "comment", value: string) => {
+  const handleInputChange = (kpiId: string, field: "target" | "actual" | "comment" | "reason" | "evidence", value: string) => {
     setInputs(prev => ({
       ...prev,
       [kpiId]: {
@@ -47,7 +47,10 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
     setLoading(kpiId);
     try {
       const dateObj = new Date(`${selectedDate}-01`);
-      const result = await saveKpiRecord(kpiId, targetVal, actualVal, dateObj, data.comment || "");
+      const result = await saveKpiRecord(kpiId, targetVal, actualVal, dateObj, data.comment || "", {
+        varianceReason: data.reason || null,
+        evidenceUrl: data.evidence || null,
+      });
       if (!result.success) {
         alert(result.error);
         return;
@@ -125,19 +128,38 @@ export function DataEntryClient({ kpis, settings }: { kpis: KPI[], settings: { a
                   />
                 </TableCell>
                 <TableCell>
-                  <Input 
-                    type="text" 
-                    placeholder="Sapma varsa yorum..." 
-                    aria-label={`${kpi.name} Açıklama`}
-                    className={`h-8 text-xs ${
-                      inputs[kpi.id]?.target && inputs[kpi.id]?.actual && 
-                      ((parseFloat(inputs[kpi.id]?.actual) - parseFloat(inputs[kpi.id]?.target)) / parseFloat(inputs[kpi.id]?.target)) * 100 <= settings.amberThreshold 
-                      ? "bg-amber-950 border-amber-900 placeholder:text-amber-700" 
-                      : "bg-zinc-900 border-zinc-700"
-                    }`}
-                    value={inputs[kpi.id]?.comment || ""}
-                    onChange={(e) => handleInputChange(kpi.id, "comment", e.target.value)}
-                  />
+                  <div className="flex flex-col gap-1">
+                    <Input
+                      type="text"
+                      placeholder="Sapma varsa yorum..."
+                      aria-label={`${kpi.name} Açıklama`}
+                      className={`h-8 text-xs ${
+                        inputs[kpi.id]?.target && inputs[kpi.id]?.actual &&
+                        ((parseFloat(inputs[kpi.id]?.actual) - parseFloat(inputs[kpi.id]?.target)) / parseFloat(inputs[kpi.id]?.target)) * 100 <= settings.amberThreshold
+                        ? "bg-amber-950 border-amber-900 placeholder:text-amber-700"
+                        : "bg-zinc-900 border-zinc-700"
+                      }`}
+                      value={inputs[kpi.id]?.comment || ""}
+                      onChange={(e) => handleInputChange(kpi.id, "comment", e.target.value)}
+                    />
+                    {/* FR-15: sapma gerekçesi + kanıt bağlantısı */}
+                    <Input
+                      type="text"
+                      placeholder="Sapma gerekçesi (FR-15)"
+                      aria-label={`${kpi.name} Sapma Gerekçesi`}
+                      className="h-7 text-xs bg-zinc-900 border-zinc-800"
+                      value={inputs[kpi.id]?.reason || ""}
+                      onChange={(e) => handleInputChange(kpi.id, "reason", e.target.value)}
+                    />
+                    <Input
+                      type="url"
+                      placeholder="Kanıt URL (opsiyonel)"
+                      aria-label={`${kpi.name} Kanıt Bağlantısı`}
+                      className="h-7 text-xs bg-zinc-900 border-zinc-800"
+                      value={inputs[kpi.id]?.evidence || ""}
+                      onChange={(e) => handleInputChange(kpi.id, "evidence", e.target.value)}
+                    />
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button 

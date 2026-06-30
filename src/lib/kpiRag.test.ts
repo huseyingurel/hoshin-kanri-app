@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeKpiRagFromVariancePercent,
   computePercentVariance,
+  resolveThresholds,
   shouldAutoOpenCountermeasure,
 } from "@/lib/kpiRag";
 
@@ -46,5 +47,33 @@ describe("shouldAutoOpenCountermeasure", () => {
     expect(shouldAutoOpenCountermeasure("RED")).toBe(true);
     expect(shouldAutoOpenCountermeasure("AMBER")).toBe(false);
     expect(shouldAutoOpenCountermeasure("GREEN")).toBe(false);
+  });
+});
+
+describe("resolveThresholds (FR-12 per-KPI override)", () => {
+  it("KPI eşiği yoksa (null) varsayılanı kullanır", () => {
+    expect(resolveThresholds({ redThreshold: null, amberThreshold: null }, defaultThresholds)).toEqual(
+      defaultThresholds,
+    );
+    expect(resolveThresholds({}, defaultThresholds)).toEqual(defaultThresholds);
+  });
+
+  it("KPI eşiği varsa varsayılanı ezer (her eşik bağımsız)", () => {
+    expect(resolveThresholds({ redThreshold: -20, amberThreshold: -8 }, defaultThresholds)).toEqual({
+      redThreshold: -20,
+      amberThreshold: -8,
+    });
+    // yalnız biri override
+    expect(resolveThresholds({ redThreshold: -15, amberThreshold: null }, defaultThresholds)).toEqual({
+      redThreshold: -15,
+      amberThreshold: -5,
+    });
+  });
+
+  it("override edilen eşik renk sonucunu değiştirir", () => {
+    // -12 sapma: varsayılanda (-10 red) RED; KPI eşiği -15 red ise AMBER (-8 amber)
+    const perKpi = resolveThresholds({ redThreshold: -15, amberThreshold: -8 }, defaultThresholds);
+    expect(computeKpiRagFromVariancePercent(-12, defaultThresholds)).toBe("RED");
+    expect(computeKpiRagFromVariancePercent(-12, perKpi)).toBe("AMBER");
   });
 });

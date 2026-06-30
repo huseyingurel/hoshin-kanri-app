@@ -23,3 +23,17 @@ export function computeKpiRagFromVariancePercent(
 export function shouldAutoOpenCountermeasure(status: KpiRagColor): boolean {
   return status === "RED";
 }
+
+/**
+ * Etkin eşikleri çözer (FR-12): KPI'ya özel eşik (null değilse) SystemSetting varsayılanını
+ * ezer; her eşik bağımsız çözülür (biri override, diğeri varsayılan olabilir).
+ */
+export function resolveThresholds(
+  perKpi: { redThreshold?: number | null; amberThreshold?: number | null },
+  defaults: RagThresholds,
+): RagThresholds {
+  return {
+    redThreshold: perKpi.redThreshold ?? defaults.redThreshold,
+    amberThreshold: perKpi.amberThreshold ?? defaults.amberThreshold,
+  };
+}
