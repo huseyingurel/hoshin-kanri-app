@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronRight, FileText, PlusCircle, Target, Users } from "lucide-react";
-import { createReview, createDecision } from "../actions/reviewActions";
+import { AlertCircle, CalendarDays, CheckCircle2, ChevronRight, FileText, PlusCircle, Target, Users, ListTodo, ArrowRightCircle } from "lucide-react";
+import { createReview, createDecision, getReviewAgenda } from "../actions/reviewActions";
+import { createActionPlanFromDecision } from "../actions/actionPlanActions";
 
 export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, overdueTasks = [], users }: any) {
   const [activeTab, setActiveTab] = useState("agenda"); // agenda, history
@@ -29,6 +30,39 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
   const [assigneeId, setAssigneeId] = useState("");
   const [selectedKpiId, setSelectedKpiId] = useState<string | null>(null);
   const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
+
+  // FR-31/32: seçili oturum için karar bekleyenler (sunucudan)
+  const [decisionsNeeded, setDecisionsNeeded] = useState<any[]>([]);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedReviewId) {
+      setDecisionsNeeded([]);
+      return;
+    }
+    let cancelled = false;
+    getReviewAgenda(selectedReviewId).then((res) => {
+      if (!cancelled && res) setDecisionsNeeded(res.decisionsNeeded as any[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedReviewId, reviews]);
+
+  const handleConvertDecision = async (decisionId: string) => {
+    setConvertingId(decisionId);
+    const res = await createActionPlanFromDecision(decisionId);
+    setConvertingId(null);
+    if (res.success) {
+      alert("Aksiyon planı oluşturuldu.");
+      if (selectedReviewId) {
+        const refreshed = await getReviewAgenda(selectedReviewId);
+        if (refreshed) setDecisionsNeeded(refreshed.decisionsNeeded as any[]);
+      }
+    } else {
+      alert(res.error);
+    }
+  };
 
   const handleCreateReview = async () => {
     if (!newReviewTitle) return;
@@ -253,8 +287,55 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
             )}
           </div>
 
-          {/* Sağ Panel: Otomatik Gündem (Kırmızı KPI'lar) */}
+          {/* Sağ Panel: Otomatik Gündem */}
           <div className="lg:col-span-2 flex flex-col gap-4">
+            {/* FR-32: karar bekleyenler (vadesi geçmiş veya atanmamış açık kararlar) */}
+            {selectedReviewId && (
+              <>
+                <h3 className="text-lg font-semibold flex items-center gap-2 text-purple-400">
+                  <ListTodo size={20} /> Karar Bekleyenler
+                </h3>
+                {decisionsNeeded.length === 0 ? (
+                  <Card className="bg-zinc-950 border-zinc-800">
+                    <CardContent className="py-6 text-center text-zinc-500 text-sm">
+                      Vadesi geçmiş veya atanmamış açık karar yok.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  decisionsNeeded.map((d: any) => (
+                    <Card key={d.id} className="bg-zinc-950 border-purple-900/30">
+                      <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                        <div>
+                          <CardTitle className="text-base">{d.decisionText}</CardTitle>
+                          <CardDescription className="mt-1 flex items-center gap-2 flex-wrap">
+                            {d.kpi?.name && <span>KPI: {d.kpi.name}</span>}
+                            <span className="text-zinc-500">
+                              • {d.assignee?.name ? `Sorumlu: ${d.assignee.name}` : "Atanmadı"}
+                            </span>
+                            {d.dueDate && (
+                              <span className="text-zinc-500">
+                                • Vade: {new Date(d.dueDate).toLocaleDateString("tr-TR")}
+                              </span>
+                            )}
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={convertingId === d.id}
+                          onClick={() => handleConvertDecision(d.id)}
+                          className="bg-indigo-600/10 text-indigo-400 border-indigo-600/30 hover:bg-indigo-600/20 shrink-0"
+                        >
+                          <ArrowRightCircle size={14} className="mr-1.5" />
+                          {convertingId === d.id ? "..." : "Aksiyon Planına Dönüştür"}
+                        </Button>
+                      </CardHeader>
+                    </Card>
+                  ))
+                )}
+              </>
+            )}
+
             <h3 className="text-lg font-semibold flex items-center gap-2 text-rose-400">
               <AlertCircle size={20} /> Müdahale Gerektiren Metrikler
             </h3>

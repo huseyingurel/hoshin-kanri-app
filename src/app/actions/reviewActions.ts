@@ -13,6 +13,8 @@ import {
 import { recordAudit } from "@/lib/engine/audit";
 import { upsertSystemTask } from "@/lib/engine/tasks";
 import { notify } from "@/lib/engine/notifications";
+import { deliverEmail } from "@/lib/email";
+import { assembleAgenda } from "@/lib/engine/agenda";
 
 export async function getReviews() {
   const session = await getSession();
@@ -157,6 +159,21 @@ export async function getReviewAgendaItems() {
   return { activeRedKpis, openCountermeasures, overdueTasks };
 }
 
+/** FR-31/32: seçili inceleme için kategorize gündem (karar bekleyenler dahil). */
+export async function getReviewAgenda(reviewId: string) {
+  const session = await getSession();
+  if (!session?.userId) return null;
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  if (!dbUser) return null;
+  const scope: UserScope = { id: dbUser.id, role: dbUser.role, departmentId: dbUser.departmentId };
+  const pkg = await assembleAgenda(prisma, reviewId, scope);
+  // İstemciye yalnız karar-bekleyenleri ve sayımları döndür (diğer kategoriler zaten sayfada).
+  return { decisionsNeeded: pkg.decisionsNeeded, counts: pkg.counts };
+}
+
 export async function createDecision(data: {
   reviewId: string;
   decisionText: string;
@@ -218,6 +235,23 @@ export async function createDecision(data: {
 
     return d;
   });
+
+  // FR-28: in-app bildirim commit edildi; e-posta commit SONRASI denenir (in-app kaynak doğrudur).
+  if (data.assigneeId) {
+    const assignee = await prisma.user.findUnique({
+      where: { id: data.assigneeId },
+      select: { email: true },
+    });
+    await deliverEmail({
+      to: assignee?.email,
+      type: "DECISION_ASSIGNED",
+      ctx: {
+        title: "Size bir karar atandı",
+        body: data.decisionText.slice(0, 200),
+        link: `/meetings?review=${data.reviewId}`,
+      },
+    });
+  }
 
   revalidatePath("/meetings");
   revalidatePath("/reviews");
