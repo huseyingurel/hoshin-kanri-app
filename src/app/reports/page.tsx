@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { ReportClient } from "./ReportClient";
+import { ExportPanel } from "./ExportPanel";
 import { FileText } from "lucide-react";
 import { getSessionOrRedirect } from "@/lib/session";
 import { isOrgWideRole } from "@/lib/access";
@@ -82,6 +83,18 @@ export default async function ReportsPage() {
     },
   });
 
+  // Dışa-aktarma paneli için kapsamlı yıllar (arşiv) + departmanlar (yalnız kurum geneli süzer).
+  const years = Array.from(new Set(hoshins.map((h) => h.year))).sort((a, b) => b - a);
+  const departments = orgWide
+    ? await prisma.department.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })
+    : [];
+
+  const templateRows = await prisma.reportTemplate.findMany({ orderBy: { createdAt: "desc" } });
+  const templates = templateRows.map((t) => {
+    const cfg = (t.config ?? {}) as { format?: string };
+    return { id: t.id, key: t.key, name: t.name, reportType: t.reportType, format: cfg.format ?? "PDF" };
+  });
+
   const hoshinProgress = hoshins.map((h) => {
     const allActions = h.majorTasks.flatMap((mt) => mt.actionPlans);
     const totalProg = allActions.reduce((sum, act) => sum + act.progressPercent, 0);
@@ -119,6 +132,8 @@ export default async function ReportsPage() {
           </p>
         </div>
       </div>
+
+      <ExportPanel years={years} departments={departments} templates={templates} />
 
       <ReportClient
         stats={{ green: greenCount, amber: amberCount, red: redCount }}

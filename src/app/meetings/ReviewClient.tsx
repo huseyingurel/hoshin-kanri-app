@@ -436,7 +436,16 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
                       </CardDescription>
                     </div>
                   </div>
-                  <Badge variant="outline" className="bg-zinc-900">{review.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    {/* FR-34: toplantı tutanağını PDF olarak indir */}
+                    <a
+                      href={`/api/export/meetingMinutes?format=pdf&reviewId=${review.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-rose-600/30 bg-rose-600/10 px-2.5 py-1.5 text-xs font-medium text-rose-400 hover:bg-rose-600/20"
+                    >
+                      <FileText size={14} /> Tutanak PDF
+                    </a>
+                    <Badge variant="outline" className="bg-zinc-900">{review.status}</Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

@@ -55,12 +55,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
     return Response.json({ error: "kullanıcı bulunamadı" }, { status: 401 });
   }
   const scope: UserScope = { id: dbUser.id, role: dbUser.role, departmentId: dbUser.departmentId };
+
+  // Şablon (FR-38): ?template=key → kayıtlı rapor türü + filtreler taban alınır; açık URL
+  // parametreleri şablonun üzerine yazar (kullanıcı yine de daraltabilir).
+  let reportKey = kind;
+  let effectiveFormat = format;
+  const templateKey = url.searchParams.get("template");
+  if (templateKey) {
+    const tpl = await prisma.reportTemplate.findUnique({ where: { key: templateKey } });
+    if (!tpl) {
+      return Response.json({ error: `şablon bulunamadı: ${templateKey}` }, { status: 404 });
+    }
+    const cfg = (tpl.config ?? {}) as { filters?: typeof filters; format?: string };
+    reportKey = tpl.reportType;
+    filters = { ...(cfg.filters ?? {}), ...filters };
+    if (!url.searchParams.get("format") && cfg.format) effectiveFormat = cfg.format.toLowerCase();
+  }
   const ctx: ReportContext = { db: prisma, scope, filters };
 
   // Phase 0 kabul testi: gömülü demo çıktısı (font + xlsx yolu doğrulaması).
-  if (kind === "ping") {
-    return respond(kind, format, async () => {
-      if (format === "pdf") {
+  if (reportKey === "ping") {
+    return respond(reportKey, effectiveFormat, async () => {
+      if (effectiveFormat === "pdf") {
         return {
           buffer: await buildPdf({
             title: "Çğşöü İıĞ — PDF Türkçe Testi",
@@ -76,14 +92,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
     }, scope.id);
   }
 
-  const report = getReport(kind);
+  const report = getReport(reportKey);
   if (!report) {
-    return Response.json({ error: `bilinmeyen rapor: ${kind}` }, { status: 404 });
+    return Response.json({ error: `bilinmeyen rapor: ${reportKey}` }, { status: 404 });
   }
 
-  return respond(kind, format, async () => {
+  return respond(reportKey, effectiveFormat, async () => {
     const data = await report.fetch(ctx);
-    if (format === "pdf") {
+    if (effectiveFormat === "pdf") {
       const spec = report.toPdf(data, ctx);
       return { buffer: await buildPdf(spec), rowCount: pdfRowCount(spec) };
     }
