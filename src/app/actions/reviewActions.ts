@@ -7,8 +7,12 @@ import { isOrgWideRole } from "@/lib/access";
 import {
   countermeasureOpenScopeFilter,
   kpiScopeFilter,
+  taskScopeFilter,
   type UserScope,
 } from "@/lib/dataScope";
+import { recordAudit } from "@/lib/engine/audit";
+import { upsertSystemTask } from "@/lib/engine/tasks";
+import { notify } from "@/lib/engine/notifications";
 
 export async function getReviews() {
   const session = await getSession();
@@ -71,7 +75,7 @@ export async function createReview(data: { title: string; type: string; date: Da
 export async function getReviewAgendaItems() {
   const session = await getSession();
   if (!session?.userId) {
-    return { activeRedKpis: [], openCountermeasures: [] };
+    return { activeRedKpis: [], openCountermeasures: [], overdueTasks: [] };
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -79,7 +83,7 @@ export async function getReviewAgendaItems() {
     select: { id: true, role: true, departmentId: true },
   });
   if (!dbUser) {
-    return { activeRedKpis: [], openCountermeasures: [] };
+    return { activeRedKpis: [], openCountermeasures: [], overdueTasks: [] };
   }
 
   const scope: UserScope = {
@@ -89,6 +93,7 @@ export async function getReviewAgendaItems() {
   };
   const kWhere = kpiScopeFilter(scope);
   const cmWhere = countermeasureOpenScopeFilter(scope);
+  const tWhere = taskScopeFilter(scope);
 
   const redKpis = await prisma.kPI.findMany({
     where: {
@@ -121,7 +126,24 @@ export async function getReviewAgendaItems() {
     },
   });
 
-  return { activeRedKpis, openCountermeasures };
+  // G7: gündeme vadesi geçmiş açık görevleri ekle (kabul kriteri #5).
+  const overdueTasks = await prisma.task.findMany({
+    where: {
+      AND: [
+        { status: { in: ["OPEN", "IN_PROGRESS"] } },
+        { dueDate: { lt: new Date() } },
+        ...(tWhere ? [tWhere] : []),
+      ],
+    },
+    include: {
+      assignee: true,
+      assigneeDept: true,
+      kpi: true,
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
+  return { activeRedKpis, openCountermeasures, overdueTasks };
 }
 
 export async function createDecision(data: {
@@ -132,20 +154,64 @@ export async function createDecision(data: {
   actionPlanId?: string;
   assigneeId?: string;
 }) {
-  const decision = await prisma.decision.create({
-    data: {
-      reviewId: data.reviewId,
-      decisionText: data.decisionText,
-      status: "OPEN",
-      dueDate: data.dueDate,
-      kpiId: data.kpiId,
-      actionPlanId: data.actionPlanId,
-      assigneeId: data.assigneeId,
-    },
+  const session = await getSession();
+
+  // INV-1: karar + denetim + takip görevi + bildirim tek transaction içinde.
+  const decision = await prisma.$transaction(async (tx) => {
+    const d = await tx.decision.create({
+      data: {
+        reviewId: data.reviewId,
+        decisionText: data.decisionText,
+        status: "OPEN",
+        dueDate: data.dueDate,
+        kpiId: data.kpiId,
+        actionPlanId: data.actionPlanId,
+        assigneeId: data.assigneeId,
+      },
+    });
+
+    await recordAudit(tx, {
+      actorUserId: session?.userId ?? null,
+      action: "CREATE",
+      entityType: "Decision",
+      entityId: d.id,
+      summary: "Toplantı kararı oluşturuldu",
+      context: "createDecision",
+    });
+
+    await upsertSystemTask(tx, {
+      type: "DECISION_FOLLOWUP",
+      entityType: "Decision",
+      entityId: d.id,
+      title: `Karar takibi: ${data.decisionText.slice(0, 80)}`,
+      priority: "MEDIUM",
+      dueDate: data.dueDate ?? null,
+      assigneeId: data.assigneeId ?? null,
+      links: {
+        decisionId: d.id,
+        kpiId: data.kpiId ?? null,
+        actionPlanId: data.actionPlanId ?? null,
+      },
+    });
+
+    if (data.assigneeId) {
+      await notify(tx, {
+        userId: data.assigneeId,
+        type: "DECISION_ASSIGNED",
+        title: "Size bir karar atandı",
+        body: data.decisionText.slice(0, 200),
+        entityType: "Decision",
+        entityId: d.id,
+      });
+    }
+
+    return d;
   });
 
   revalidatePath("/meetings");
   revalidatePath("/reviews");
   revalidatePath("/my-reviews");
+  revalidatePath("/my-tasks");
+  revalidatePath("/notifications");
   return decision;
 }

@@ -87,3 +87,21 @@ export function countermeasureListScopeFilter(u: UserScope): Prisma.Countermeasu
     OR: [{ ownerUserId: u.id }, { kpi: personalKpiScopeFilter(u) }],
   };
 }
+
+/** Görevler: kurum geneli roller hepsini görür; departman kapsamlı roller kendine veya
+ * departmanına atanmış görevleri görür. Yalnız kapsamı genişletir, hiçbir rol için daraltmaz
+ * (INV-4). Durum/öncelik gibi ek koşulları çağıran ekler. */
+export function taskScopeFilter(u: UserScope): Prisma.TaskWhereInput | undefined {
+  if (isOrgWideRole(u.role)) return undefined;
+  const or: Prisma.TaskWhereInput[] = [{ assigneeId: u.id }];
+  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+    or.push({ assigneeDeptId: u.departmentId });
+  }
+  return { OR: or };
+}
+
+/** Bildirimler kişiseldir: her kullanıcı yalnız kendi bildirimlerini görür — en dar kapsam.
+ * Kurum geneli roller bile başkalarının bildirimlerini görmez (INV-4: asla genişletilmez). */
+export function notificationScopeFilter(u: UserScope): Prisma.NotificationLogWhereInput {
+  return { userId: u.id };
+}
