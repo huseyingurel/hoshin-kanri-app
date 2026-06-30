@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BarChart2, Target, AlertCircle } from "lucide-react";
+import { BarChart2, Target, AlertCircle, Download } from "lucide-react";
 import { getSessionOrRedirect } from "@/lib/session";
 import { kpiScopeFilter, type UserScope } from "@/lib/dataScope";
 import { isOrgWideRole } from "@/lib/access";
@@ -42,16 +42,25 @@ export default async function KpiBowlingChart() {
 
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <BarChart2 className="text-emerald-500" />
-          KPI & Bowling Chart
-        </h1>
-        <p className="text-zinc-400 mt-2">
-          {orgWide
-            ? "Dönemsel performans ölçümleri ve hedef sapmaları"
-            : "Yalnızca erişim kapsamınızdaki KPI'lar için dönemsel görünüm."}
-        </p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <BarChart2 className="text-emerald-500" />
+            KPI & Bowling Chart
+          </h1>
+          <p className="text-zinc-400 mt-2">
+            {orgWide
+              ? "Dönemsel performans ölçümleri ve hedef sapmaları"
+              : "Yalnızca erişim kapsamınızdaki KPI'lar için dönemsel görünüm."}
+          </p>
+        </div>
+        <a
+          href="/api/export/kpiStatus?format=xlsx"
+          className="inline-flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-600/20 shrink-0"
+        >
+          <Download size={16} />
+          Dışa Aktar (Excel)
+        </a>
       </div>
 
       <div className="flex flex-col gap-6">

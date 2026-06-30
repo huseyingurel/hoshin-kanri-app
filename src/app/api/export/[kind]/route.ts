@@ -16,7 +16,7 @@ import type { UserScope } from "@/lib/dataScope";
 import { parseReportFilters, FilterParseError } from "@/lib/export/filters";
 import { buildWorkbook, type WorkbookSpec } from "@/lib/export/excel";
 import { buildPdf, type PdfSpec } from "@/lib/export/pdf";
-import { getReport, type ReportContext } from "@/lib/export/reports/registry";
+import { getReport, type ReportContext } from "@/lib/export/reports";
 
 export const dynamic = "force-dynamic";
 
