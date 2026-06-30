@@ -43,8 +43,10 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# sqlite and docs
+# sqlite and office docs
 *.db
 *.docx
-*.md
-!README.md
+
+# prod DB pull (local only)
+.env.prod
+*.dump

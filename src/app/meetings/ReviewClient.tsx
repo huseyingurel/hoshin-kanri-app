@@ -239,15 +239,17 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                         setIsDecisionDialogOpen(open);
                         if(open) setSelectedKpiId(kpi.id);
                       }}>
-                        <DialogTrigger>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            disabled={!selectedReviewId}
-                            className="bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600/20"
-                          >
-                            <FileText size={14} className="mr-2" /> Karar Ekle
-                          </Button>
+                        <DialogTrigger
+                          render={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!selectedReviewId}
+                              className="bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600/20"
+                            />
+                          }
+                        >
+                          <FileText size={14} className="mr-2" /> Karar Ekle
                         </DialogTrigger>
                         <DialogContent className="bg-zinc-950 border-zinc-800 text-zinc-200">
                           <DialogHeader>

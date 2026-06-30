@@ -43,11 +43,11 @@ export default function LoginPage() {
                 <Label htmlFor="email" className="text-zinc-400">E-posta</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                  <Input 
-                    id="email" 
-                    name="email" 
-                    type="email" 
-                    placeholder="ornek@sirket.com" 
+                  <Input
+                    id="email"
+                    name="email"
+                    type="text"
+                    placeholder="ornek@sirket.com"
                     className="pl-10 bg-zinc-950 border-zinc-800 text-zinc-200 focus:ring-emerald-500/20 focus:border-emerald-500/50"
                     required
                   />
