@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { isOrgWideRole, usesDepartmentalDataScope } from "@/lib/access";
+import type { ReportFilters } from "@/lib/export/filters";
 
 export type UserScope = {
   id: string;
@@ -104,4 +105,45 @@ export function taskScopeFilter(u: UserScope): Prisma.TaskWhereInput | undefined
  * Kurum geneli roller bile başkalarının bildirimlerini görmez (INV-4: asla genişletilmez). */
 export function notificationScopeFilter(u: UserScope): Prisma.NotificationLogWhereInput {
   return { userId: u.id };
+}
+
+// --- Rapor/arşiv filtre besteci (FR-37/FR-42) ---
+// Tüm besteleme AND iledir: bir filtre kapsamı yalnız DARALTIR, asla genişletmez (INV-4/INV-8).
+
+/** Hoshin sorgusuna yıl daraltması ekler (FR-42 arşiv navigasyonu). */
+export function withYear(
+  where: Prisma.HoshinWhereInput | undefined,
+  year?: number,
+): Prisma.HoshinWhereInput | undefined {
+  if (year == null) return where;
+  return where ? { AND: [where, { year }] } : { year };
+}
+
+export interface ReportScopeBundle {
+  /** Kapsam ∧ departman filtresi (KPI sorguları için). org-wide + filtresiz → undefined. */
+  kpiWhere: Prisma.KPIWhereInput | undefined;
+  /** Kapsam ∧ yıl ∧ hoshinId filtresi (Hoshin sorguları için). */
+  hoshinWhere: Prisma.HoshinWhereInput | undefined;
+}
+
+/**
+ * Rol kapsam filtrelerini rapor filtreleriyle (yıl/dept/hoshin) AND-besteler.
+ * `color` burada uygulanmaz — son dönem kaydına bağlı olduğu için rapor modülü veri
+ * düzeyinde süzer. Döndürülen where'ler yalnız mevcut kapsamı daraltır.
+ */
+export function reportScopeBundle(u: UserScope, filters: ReportFilters): ReportScopeBundle {
+  const kpiAnd: Prisma.KPIWhereInput[] = [];
+  const kpiBase = kpiScopeFilter(u);
+  if (kpiBase) kpiAnd.push(kpiBase);
+  if (filters.deptId) kpiAnd.push({ responsibleDeptId: filters.deptId });
+  const kpiWhere = kpiAnd.length ? { AND: kpiAnd } : undefined;
+
+  const hoshinAnd: Prisma.HoshinWhereInput[] = [];
+  const hoshinBase = hoshinScopeFilter(u);
+  if (hoshinBase) hoshinAnd.push(hoshinBase);
+  if (filters.year != null) hoshinAnd.push({ year: filters.year });
+  if (filters.hoshinId) hoshinAnd.push({ id: filters.hoshinId });
+  const hoshinWhere = hoshinAnd.length ? { AND: hoshinAnd } : undefined;
+
+  return { kpiWhere, hoshinWhere };
 }

@@ -18,6 +18,32 @@ export type CountermeasureStatus = (typeof COUNTERMEASURE_STATUSES)[number];
 export const REVIEW_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+/** Hoshin türleri (şemada inline yorumdaydı; tek kaynağa taşındı). */
+export const HOSHIN_TYPES = ["BREAKTHROUGH", "ANNUAL"] as const;
+export type HoshinType = (typeof HOSHIN_TYPES)[number];
+
+/** Hoshin/MajorTask/ActionPlan yaşam döngüsü durumları. */
+export const HOSHIN_STATUSES = ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] as const;
+export type HoshinStatus = (typeof HOSHIN_STATUSES)[number];
+
+/** Vizyon (True North) durumları (FR-01). */
+export const VISION_STATUSES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
+export type VisionStatus = (typeof VISION_STATUSES)[number];
+
+/** Adlandırılmış standart raporlar (FR-36). Export registry anahtarları. */
+export const REPORT_KEYS = [
+  "executiveOnePager", // İcra Kurulu tek-sayfa özeti
+  "kpiStatus", // KPI durum tablosu (RAG)
+  "redKpiCountermeasures", // RED KPI'lar + açık karşı önlemler
+  "meetingMinutes", // toplantı tutanağı (reviewId gerekir)
+  "hoshinProgress", // Hoshin ilerleme özeti
+  "openDecisions", // açık kararlar
+] as const;
+export type ReportKey = (typeof REPORT_KEYS)[number];
+
+export const REPORT_FORMATS = ["PDF", "XLSX"] as const;
+export type ReportFormat = (typeof REPORT_FORMATS)[number];
+
 export const DECISION_STATUSES = ["OPEN", "IN_PROGRESS", "CLOSED"] as const;
 export type DecisionStatus = (typeof DECISION_STATUSES)[number];
 
@@ -101,3 +127,20 @@ export type CatchballEntityType = (typeof CATCHBALL_ENTITY_TYPES)[number];
 /** KPI raporlama sıklığı — şema ile uyumlu (MONTHLY/QUARTERLY mevcuttu; yarıyıl/yıllık eklendi). */
 export const REPORTING_FREQUENCIES = ["MONTHLY", "QUARTERLY", "HALF_YEAR", "ANNUAL"] as const;
 export type ReportingFrequency = (typeof REPORTING_FREQUENCIES)[number];
+
+// --- Tip koruyucular (guards) — sabit listelere karşı string doğrulama. ---
+
+export const isHoshinType = (v: unknown): v is HoshinType =>
+  typeof v === "string" && (HOSHIN_TYPES as readonly string[]).includes(v);
+export const isHoshinStatus = (v: unknown): v is HoshinStatus =>
+  typeof v === "string" && (HOSHIN_STATUSES as readonly string[]).includes(v);
+export const isVisionStatus = (v: unknown): v is VisionStatus =>
+  typeof v === "string" && (VISION_STATUSES as readonly string[]).includes(v);
+export const isReportKey = (v: unknown): v is ReportKey =>
+  typeof v === "string" && (REPORT_KEYS as readonly string[]).includes(v);
+export const isReportFormat = (v: unknown): v is ReportFormat =>
+  typeof v === "string" && (REPORT_FORMATS as readonly string[]).includes(v);
+export const isReportingFrequency = (v: unknown): v is ReportingFrequency =>
+  typeof v === "string" && (REPORTING_FREQUENCIES as readonly string[]).includes(v);
+export const isKpiRagColor = (v: unknown): v is KpiRagColor =>
+  typeof v === "string" && (KPI_RAG_COLORS as readonly string[]).includes(v);

@@ -45,6 +45,7 @@ model User {
   decisionsAssigned    Decision[] @relation("DecisionAssignee")
 
   departmentHeadOf     Department[] @relation("DepartmentHead")
+  visionsOwned         Vision[]     @relation("VisionOwner")
 
   // Yönetişim katmanı geri ilişkileri
   tasksAssigned        Task[]            @relation("TaskAssignee")
@@ -57,6 +58,22 @@ model User {
   updatedAt      DateTime @updatedAt
 }
 
+// Vizyon / True North (FR-01) — Hoshin hiyerarşisinin tepe nesnesi.
+model Vision {
+  id          String   @id @default(cuid())
+  statement   String
+  description String?
+  year        Int
+  ownerUserId String?
+  ownerUser   User?    @relation("VisionOwner", fields: [ownerUserId], references: [id])
+  status      String   @default("DRAFT") // VISION_STATUSES: DRAFT, ACTIVE, ARCHIVED
+  hoshins     Hoshin[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([statement, year])
+}
+
 model Hoshin {
   id              String   @id @default(cuid())
   title           String
@@ -67,6 +84,9 @@ model Hoshin {
   catchballStatus String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
   sponsorUserId   String?
   sponsorUser     User?    @relation("HoshinSponsor", fields: [sponsorUserId], references: [id])
+
+  visionId        String?
+  vision          Vision?  @relation(fields: [visionId], references: [id], onDelete: SetNull)
 
   majorTasks      MajorTask[]
 
@@ -128,6 +148,10 @@ model KPI {
   reportingFrequency   String   @default("MONTHLY") // REPORTING_FREQUENCIES: MONTHLY, QUARTERLY, HALF_YEAR, ANNUAL
   catchballStatus      String   @default("DRAFT") // CATCHBALL_STATUSES (domainTypes.ts)
 
+  // Per-KPI RAG eşikleri (FR-12) — null ise SystemSetting varsayılanı kullanılır
+  redThreshold         Float?   // sapma% bu eşiği aşarsa RED
+  amberThreshold       Float?   // sapma% bu eşiği aşarsa AMBER
+
   actionPlanId         String?
   actionPlan           ActionPlan? @relation(fields: [actionPlanId], references: [id], onDelete: SetNull)
   
@@ -169,6 +193,8 @@ model KPIPeriodRecord {
   lockedById           String?
   // Kanıt: yalnız URL/metin; ikili dosya saklama kapsam dışı (N2)
   evidenceUrl          String?
+  // Sapma gerekçesi (FR-15) — RED/AMBER dönemlerde neden açıklaması
+  varianceReason       String?
 
   tasks                Task[]
 
@@ -249,6 +275,19 @@ model SystemSetting {
   key         String   @unique
   value       String
   description String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Yapılandırılabilir rapor şablonları (FR-38) — kayıtlı {reportType, filters, sections, format}.
+model ReportTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique // slug; tenant-unique
+  name        String
+  description String?
+  reportType  String          // REPORT_KEYS üyesi
+  config      Json            // { sections:[], filters:{}, format:"PDF"|"XLSX" }
+  createdById String?
+  createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
