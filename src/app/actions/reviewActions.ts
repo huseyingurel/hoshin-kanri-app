@@ -55,7 +55,15 @@ export async function getReviews() {
   });
 }
 
-export async function createReview(data: { title: string; type: string; date: Date; organizerId?: string }) {
+export async function createReview(data: {
+  title: string;
+  type: string;
+  date: Date;
+  organizerId?: string;
+  frequency?: string;
+  chairUserId?: string;
+  coordinatorUserId?: string;
+}) {
   const review = await prisma.review.create({
     data: {
       title: data.title,
@@ -63,6 +71,9 @@ export async function createReview(data: { title: string; type: string; date: Da
       date: data.date,
       status: "SCHEDULED",
       organizerId: data.organizerId,
+      frequency: data.frequency || null,
+      chairUserId: data.chairUserId || null,
+      coordinatorUserId: data.coordinatorUserId || null,
     },
   });
 

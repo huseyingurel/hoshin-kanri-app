@@ -18,6 +18,10 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
   // Yeni Review Form State
   const [newReviewTitle, setNewReviewTitle] = useState("");
   const [newReviewType, setNewReviewType] = useState("MEETING");
+  // FR-30: toplantı meta verisi — sıklık / başkan / koordinatör (opsiyonel)
+  const [newReviewFrequency, setNewReviewFrequency] = useState("");
+  const [newReviewChairId, setNewReviewChairId] = useState("");
+  const [newReviewCoordinatorId, setNewReviewCoordinatorId] = useState("");
   const [isCreatingReview, setIsCreatingReview] = useState(false);
 
   // Yeni Karar Form State
@@ -33,9 +37,15 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
       title: newReviewTitle,
       type: newReviewType,
       date: new Date(),
+      frequency: newReviewFrequency || undefined,
+      chairUserId: newReviewChairId || undefined,
+      coordinatorUserId: newReviewCoordinatorId || undefined,
     });
     if (review) setSelectedReviewId(review.id);
     setNewReviewTitle("");
+    setNewReviewFrequency("");
+    setNewReviewChairId("");
+    setNewReviewCoordinatorId("");
     setIsCreatingReview(false);
   };
 
@@ -131,7 +141,48 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
                       <SelectItem value="EXPERT_REVIEW">Uzman Değerlendirmesi</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button 
+
+                  {/* FR-30: opsiyonel toplantı meta verisi — sıklık / başkan / koordinatör */}
+                  <Select value={newReviewFrequency} onValueChange={(val) => setNewReviewFrequency(val || "")}>
+                    <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                      <SelectValue placeholder="Sıklık (opsiyonel)...">
+                        {newReviewFrequency
+                          ? ({ MONTHLY: "Aylık", QUARTERLY: "Üç Aylık", HALF_YEAR: "Yarıyıl", ANNUAL: "Yıllık" } as Record<string, string>)[newReviewFrequency]
+                          : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      <SelectItem value="MONTHLY">Aylık</SelectItem>
+                      <SelectItem value="QUARTERLY">Üç Aylık</SelectItem>
+                      <SelectItem value="HALF_YEAR">Yarıyıl</SelectItem>
+                      <SelectItem value="ANNUAL">Yıllık</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={newReviewChairId} onValueChange={(val) => setNewReviewChairId(val || "")}>
+                    <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                      <SelectValue placeholder="Başkan (opsiyonel)...">
+                        {newReviewChairId ? (users.find((u: any) => u.id === newReviewChairId)?.name || "Seçili") : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      {users.map((u: any) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={newReviewCoordinatorId} onValueChange={(val) => setNewReviewCoordinatorId(val || "")}>
+                    <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                      <SelectValue placeholder="Koordinatör (opsiyonel)...">
+                        {newReviewCoordinatorId ? (users.find((u: any) => u.id === newReviewCoordinatorId)?.name || "Seçili") : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      {users.map((u: any) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
                     onClick={handleCreateReview} 
                     disabled={isCreatingReview || !newReviewTitle}
                     className="w-full bg-zinc-800 hover:bg-zinc-700"
