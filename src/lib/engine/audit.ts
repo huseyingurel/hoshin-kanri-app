@@ -1,7 +1,10 @@
 /**
- * Denetim (audit) yardımcıları — bu dosyada yalnız saf `diff`. Yan etkili `recordAudit`
- * (tx içinde) Faz 3'te eklenir.
+ * Denetim (audit) yardımcıları: saf `diff` + tx içinde çalışan `recordAudit`.
  */
+
+import { Prisma, type AuditLog } from "@prisma/client";
+import type { AuditAction } from "@/lib/domainTypes";
+import { logEvent } from "@/lib/log";
 
 export interface FieldChange {
   field: string;
@@ -57,4 +60,50 @@ export function diff(
     }
   }
   return changes;
+}
+
+export interface RecordAuditInput {
+  /** null = SYSTEM aktörü (cron/sweep). */
+  actorUserId?: string | null;
+  action: AuditAction;
+  entityType: string;
+  entityId: string;
+  /** `diff()` çıktısı; boş/verilmemişse JSON sütunu null kalır. */
+  changes?: FieldChange[];
+  /** Okunabilir Türkçe tek satır özet. */
+  summary?: string | null;
+  /** Çağrı yeri: "saveKpiRecord" | "sweep" | "catchball.applyTransition" | ... */
+  context: string;
+}
+
+/**
+ * Bir `AuditLog` satırını **çağıranın transaction'ı içinde** yazar (INV-1).
+ * Daima bir `$transaction` callback'inden çağrılmalıdır; audit yazımı başarısız olursa
+ * tüm mutasyon geri alınır. `logEvent` fırlatmaya karşı korunaklıdır (bkz. log.ts).
+ */
+export async function recordAudit(
+  tx: Prisma.TransactionClient,
+  input: RecordAuditInput,
+): Promise<AuditLog> {
+  const hasChanges = Array.isArray(input.changes) && input.changes.length > 0;
+  const row = await tx.auditLog.create({
+    data: {
+      actorUserId: input.actorUserId ?? null,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      changes: hasChanges ? (input.changes as unknown as Prisma.InputJsonValue) : undefined,
+      summary: input.summary ?? null,
+      context: input.context,
+    },
+  });
+  logEvent("info", "audit.recorded", {
+    auditId: row.id,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    actorUserId: input.actorUserId ?? null,
+    context: input.context,
+  });
+  return row;
 }
