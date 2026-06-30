@@ -96,6 +96,29 @@ export function periodWindow(
 }
 
 /**
+ * Bir KPI'nın son dönemlerindeki **ardışık RED** sayısını döner (en yeniden geriye).
+ * Aynı döneme ait birden çok kayıt (yeniden kaydetme) tek dönem sayılır: periodKey'e göre
+ * ilk (en yeni) kayıt o dönemin durumudur. RED olmayan ilk dönemde sayım durur.
+ *
+ * `records` periodStart'a göre **azalan** (en yeni önce) sıralı verilmelidir.
+ */
+export function countLeadingConsecutiveRed(
+  records: ReadonlyArray<{ periodStart: Date; statusColor: string | null }>,
+  frequency: ReportingFrequency,
+): number {
+  let count = 0;
+  let lastKey: string | null = null;
+  for (const r of records) {
+    const key = periodKeyFor(r.periodStart, frequency);
+    if (key === lastKey) continue; // aynı dönemin başka kaydı → atla
+    lastKey = key;
+    if (r.statusColor === "RED") count++;
+    else break;
+  }
+  return count;
+}
+
+/**
  * Verilen mali yıl ve sıklık için, `now` itibarıyla başlamış olan dönemlerin anahtarları.
  * `now` mali yıldan önceyse boş dizi; mali yıl tamamen geçmişse o yılın tüm dönemleri.
  *

@@ -15,33 +15,11 @@ import { diff, recordAudit } from "@/lib/engine/audit";
 import { upsertSystemTask } from "@/lib/engine/tasks";
 import { notify, notifyMany } from "@/lib/engine/notifications";
 import { computeEscalationLevel } from "@/lib/engine/escalation";
-import { parseFrequency, periodKeyFor } from "@/lib/engine/calendar";
-import type { ReportingFrequency } from "@/lib/domainTypes";
+import { countLeadingConsecutiveRed, parseFrequency, periodKeyFor } from "@/lib/engine/calendar";
 import { logEvent } from "@/lib/log";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 export type SaveKpiRecordResult = ActionResult;
-
-/**
- * Bir KPI'nın son dönemlerindeki **ardışık RED** sayısını döner (en yeniden geriye).
- * Aynı döneme ait birden çok kayıt (yeniden kaydetme) tek dönem sayılır: periodKey'e göre
- * ilk (en yeni) kayıt o dönemin durumudur. RED olmayan ilk dönemde sayım durur.
- */
-function countLeadingConsecutiveRed(
-  records: ReadonlyArray<{ periodStart: Date; statusColor: string | null }>,
-  frequency: ReportingFrequency,
-): number {
-  let count = 0;
-  let lastKey: string | null = null;
-  for (const r of records) {
-    const key = periodKeyFor(r.periodStart, frequency);
-    if (key === lastKey) continue; // aynı dönemin başka kaydı → atla
-    lastKey = key;
-    if (r.statusColor === "RED") count++;
-    else break;
-  }
-  return count;
-}
 
 export async function saveKpiRecord(
   kpiId: string,
