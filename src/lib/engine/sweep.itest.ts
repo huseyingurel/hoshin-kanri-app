@@ -153,6 +153,53 @@ describe("runDailySweep (entegrasyon)", () => {
     expect(await prisma.task.count({ where: { type: "OVERDUE_FOLLOWUP" } })).toBe(0);
   });
 
+  it("yaklaşan (T-3g) SCHEDULED değerlendirme → organizatör/başkan/koordinatöre REVIEW_UPCOMING (idempotan)", async () => {
+    const seed = await seedGovernance(prisma);
+    const soon = new Date(JUNE_END.getTime() + 2 * 24 * 60 * 60 * 1000); // +2 gün, pencere içinde
+    const review = await prisma.review.create({
+      data: {
+        title: "Temmuz Kurul Toplantısı",
+        type: "MEETING",
+        date: soon,
+        status: "SCHEDULED",
+        organizerId: seed.ownerId,
+        chairUserId: seed.managerId,
+        coordinatorUserId: seed.ownerId, // organizatörle aynı → tekilleştirilmeli
+      },
+    });
+
+    const summary = await runDailySweep({ now: JUNE_END });
+    expect(summary.failures).toHaveLength(0);
+
+    const notifs = await prisma.notificationLog.findMany({
+      where: { type: "REVIEW_UPCOMING", entityId: review.id },
+    });
+    // organizatör + başkan (koordinatör organizatörle aynı, elenir) → 2 alıcı.
+    expect(notifs.map((n) => n.userId).sort()).toEqual([seed.ownerId, seed.managerId].sort());
+
+    // İkinci tarama yeni bildirim üretmez (INV-3).
+    const second = await runDailySweep({ now: JUNE_END });
+    expect(await prisma.notificationLog.count({ where: { type: "REVIEW_UPCOMING" } })).toBe(2);
+    expect(second.failures).toHaveLength(0);
+  });
+
+  it("pencere dışındaki / SCHEDULED olmayan değerlendirme → REVIEW_UPCOMING üretmez", async () => {
+    const seed = await seedGovernance(prisma);
+    const farOff = new Date(JUNE_END.getTime() + 10 * 24 * 60 * 60 * 1000); // +10 gün, pencere dışı
+    await prisma.review.create({
+      data: { title: "Uzak", type: "MEETING", date: farOff, status: "SCHEDULED", organizerId: seed.ownerId },
+    });
+    const inWindowButDone = new Date(JUNE_END.getTime() + 1 * 24 * 60 * 60 * 1000);
+    await prisma.review.create({
+      data: { title: "Tamamlanmış", type: "MEETING", date: inWindowButDone, status: "COMPLETED", organizerId: seed.ownerId },
+    });
+
+    const summary = await runDailySweep({ now: JUNE_END });
+
+    expect(summary.failures).toHaveLength(0);
+    expect(await prisma.notificationLog.count({ where: { type: "REVIEW_UPCOMING" } })).toBe(0);
+  });
+
   it("geçersiz raporlama sıklığı bir KPI'yı düşürür ama diğerlerini etkilemez (INV-7)", async () => {
     const good = await seedGovernance(prisma);
     const bad = await prisma.kPI.create({

@@ -293,6 +293,47 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
               ))
             )}
 
+            {/* FR-24: gündeme açık karşı önlemleri ekle. */}
+            <h3 className="text-lg font-semibold flex items-center gap-2 text-orange-400 mt-4">
+              <FileText size={20} /> Açık Karşı Önlemler
+            </h3>
+            {openCountermeasures.length === 0 ? (
+              <Card className="bg-zinc-950 border-zinc-800">
+                <CardContent className="py-6 text-center text-zinc-500 text-sm">
+                  Açık karşı önlem yok.
+                </CardContent>
+              </Card>
+            ) : (
+              openCountermeasures.map((cm: any) => (
+                <Card key={cm.id} className="bg-zinc-950 border-orange-900/30">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base">{cm.problemStatement}</CardTitle>
+                      <CardDescription className="mt-1 flex items-center gap-2 flex-wrap">
+                        {cm.kpi?.name && <span>KPI: {cm.kpi.name}</span>}
+                        {cm.ownerUser?.name && <span className="text-zinc-500">• Sorumlu: {cm.ownerUser.name}</span>}
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
+                        {cm.status === "IN_PROGRESS" ? "Devam Ediyor" : "Açık"}
+                      </Badge>
+                      {cm.dueDate && (
+                        <span className="text-[10px] text-zinc-500">
+                          Vade: {new Date(cm.dueDate).toLocaleDateString("tr-TR")}
+                        </span>
+                      )}
+                    </div>
+                  </CardHeader>
+                  {cm.actionSummary && (
+                    <CardContent className="pt-0 text-sm text-zinc-400">
+                      <strong>Aksiyon:</strong> {cm.actionSummary}
+                    </CardContent>
+                  )}
+                </Card>
+              ))
+            )}
+
             {/* G7: gündeme vadesi geçmiş görevler (kabul kriteri #5). */}
             <h3 className="text-lg font-semibold flex items-center gap-2 text-amber-400 mt-4">
               <AlertCircle size={20} /> Vadesi Geçmiş Görevler

@@ -26,6 +26,8 @@ import { logEvent } from "@/lib/log";
 
 /** Vade yaklaşımı penceresi: now < dueDate ≤ now + DUE_SOON_DAYS gün. */
 export const DUE_SOON_DAYS = 3;
+/** Değerlendirme hatırlatma penceresi: now < date ≤ now + REVIEW_UPCOMING_DAYS gün (FR-31/§11-#6). */
+export const REVIEW_UPCOMING_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface SweepFailure {
@@ -407,6 +409,41 @@ export async function runDailySweep({ now = new Date() }: { now?: Date } = {}): 
       }
     } catch (e) {
       failures.push({ entity: `Decision:${d.id}`, error: errMsg(e) });
+    }
+  }
+
+  // --- 5: yaklaşan değerlendirmeler → gündem hatırlatması (FR-31 / §11-#6) -----------
+  // SCHEDULED durumdaki, tarihi now < date ≤ now + REVIEW_UPCOMING_DAYS aralığındaki
+  // değerlendirmeler için organizatör/başkan/koordinatöre REVIEW_UPCOMING bildirimi.
+  // İdempotans: (userId, REVIEW_UPCOMING, Review, reviewId) beşlisiyle tekilleştirilir.
+  const reviewCutoff = new Date(now.getTime() + REVIEW_UPCOMING_DAYS * DAY_MS);
+  const upcomingReviews = await prisma.review.findMany({
+    where: { status: "SCHEDULED", date: { gt: now, lte: reviewCutoff } },
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      organizerId: true,
+      chairUserId: true,
+      coordinatorUserId: true,
+    },
+  });
+  scanned += upcomingReviews.length;
+
+  for (const review of upcomingReviews) {
+    const recipients = dedupeIds([review.organizerId, review.chairUserId, review.coordinatorUserId]);
+    if (recipients.length === 0) continue; // bildirilecek kimse yoksa atla
+    try {
+      await prisma.$transaction(async (tx) => {
+        await notifyEach(tx, counters, recipients, {
+          type: "REVIEW_UPCOMING",
+          title: `Yaklaşan değerlendirme: ${review.title}`,
+          entityType: "Review",
+          entityId: review.id,
+        });
+      });
+    } catch (e) {
+      failures.push({ entity: `Review:${review.id}`, error: errMsg(e) });
     }
   }
 
