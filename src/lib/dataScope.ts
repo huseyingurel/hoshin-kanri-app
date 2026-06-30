@@ -7,10 +7,13 @@ export type UserScope = {
   departmentId: string | null;
 };
 
-/** KPI'lar: sahip veya (USER / KPI_OWNER / DEPT_HEAD + departmentId) aynı sorumlu departman. */
+/** KPI'lar: sahip veya departmanı atanmış kullanıcının sorumlu departmanı.
+ * Departman üyeliği role bağlı değildir; kurum geneli roller de (ADMIN/PMO/EXECUTIVE)
+ * "Benim KPI'larım" sayfasında kendi departmanlarının KPI'larını görür. Bu yalnızca
+ * kapsamı genişletir (kullanıcının kendi departmanı), hiçbir rol için daraltmaz. */
 export function personalKpiScopeFilter(u: UserScope): Prisma.KPIWhereInput {
   const or: Prisma.KPIWhereInput[] = [{ ownerUserId: u.id }];
-  if (usesDepartmentalDataScope(u.role, u.departmentId) && u.departmentId) {
+  if (u.departmentId) {
     or.push({ responsibleDeptId: u.departmentId });
   }
   return { OR: or };
