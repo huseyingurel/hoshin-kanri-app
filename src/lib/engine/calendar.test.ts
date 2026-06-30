@@ -100,6 +100,20 @@ describe("periodsPerYear", () => {
   });
 });
 
+describe("bilinmeyen sıklıkta sessizce undefined dönmez (fırlatır)", () => {
+  // Çalışma zamanında DB'den gelen bozuk bir sıklık değeri için: undefined yerine hata.
+  const bogus = "BOGUS" as never;
+  it("periodKeyFor fırlatır", () => {
+    expect(() => periodKeyFor(utc(2026, 1, 1), bogus)).toThrow();
+  });
+  it("periodWindow fırlatır", () => {
+    expect(() => periodWindow(utc(2026, 1, 1), bogus)).toThrow();
+  });
+  it("periodsPerYear fırlatır", () => {
+    expect(() => periodsPerYear(bogus)).toThrow();
+  });
+});
+
 describe("parseFrequency", () => {
   it("geçerli sıklıkları döner", () => {
     expect(parseFrequency("MONTHLY")).toBe("MONTHLY");

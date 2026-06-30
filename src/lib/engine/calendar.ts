@@ -98,6 +98,9 @@ export function periodWindow(
 /**
  * Verilen mali yıl ve sıklık için, `now` itibarıyla başlamış olan dönemlerin anahtarları.
  * `now` mali yıldan önceyse boş dizi; mali yıl tamamen geçmişse o yılın tüm dönemleri.
+ *
+ * Varsayım: mali yıl takvim yılıyla hizalıdır (Ocak başlangıçlı). Nisan-Mart gibi kaymış
+ * mali yıllar bu POC kapsamında desteklenmez; gerekirse ofsetli bir sürüm eklenir.
  */
 export function duePeriodsAsOf(
   now: Date,

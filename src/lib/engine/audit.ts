@@ -27,6 +27,9 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   if (a instanceof Date || b instanceof Date) return false;
 
   if (typeof a === "object" && typeof b === "object") {
+    // Not: JSON.stringify anahtar sırasına duyarlıdır. Audit yalnız skaler sütunları
+    // (string/number/boolean/Date/null) karşılaştırdığı için bu yeterlidir; nesne-değerli
+    // alanlar diff edilmek istenirse derin eşitlik gerekir.
     try {
       return JSON.stringify(a) === JSON.stringify(b);
     } catch {
