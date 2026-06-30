@@ -1,8 +1,11 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
+import { isOrgWideRole, usesDepartmentalDataScope } from "@/lib/access";
+import { hoshinScopeFilter, personalKpiScopeFilter, type UserScope } from "@/lib/dataScope";
 import { applyTransition } from "@/lib/engine/catchball";
 import { recordAudit } from "@/lib/engine/audit";
 import {
@@ -25,6 +28,71 @@ function isStatus(s: string): s is CatchballStatus {
 }
 function isItemType(s: string): s is CatchballItemType {
   return (CATCHBALL_ITEM_TYPES as readonly string[]).includes(s);
+}
+
+async function currentScope(): Promise<UserScope | null> {
+  const session = await getSession();
+  if (!session?.userId) return null;
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, role: true, departmentId: true },
+  });
+  return dbUser ?? null;
+}
+
+/**
+ * Kullanıcı bu catchball varlığına erişebilir mi? Kurum geneli roller her şeyi görür;
+ * departman kapsamlı roller yalnız kendi/departman kapsamındaki varlıklara erişir (INV-4:
+ * kapsam yalnız kullanıcının kendi alanına genişler, asla daraltılmaz). Catchball iş birliğine
+ * dayalı olsa da, bir kullanıcının göremediği bir varlığın yaşam döngüsünü değiştirmesini
+ * engeller (doğrudan aksiyon çağrısıyla IDOR'a karşı).
+ */
+async function canAccess(
+  scope: UserScope,
+  entityType: CatchballEntityType,
+  entityId: string,
+): Promise<boolean> {
+  if (isOrgWideRole(scope.role)) return true;
+  switch (entityType) {
+    case "HOSHIN": {
+      const w = hoshinScopeFilter(scope);
+      const f = await prisma.hoshin.findFirst({
+        where: { id: entityId, ...(w ?? {}) },
+        select: { id: true },
+      });
+      return !!f;
+    }
+    case "MAJOR_TASK": {
+      const w = hoshinScopeFilter(scope);
+      const f = await prisma.majorTask.findFirst({
+        where: { id: entityId, ...(w ? { hoshin: w } : {}) },
+        select: { id: true },
+      });
+      return !!f;
+    }
+    case "ACTION_PLAN": {
+      const or: Prisma.ActionPlanWhereInput[] = [
+        { ownerUserId: scope.id },
+        { kpis: { some: { ownerUserId: scope.id } } },
+      ];
+      if (usesDepartmentalDataScope(scope.role, scope.departmentId) && scope.departmentId) {
+        or.push({ responsibleDeptId: scope.departmentId });
+        or.push({ kpis: { some: { responsibleDeptId: scope.departmentId } } });
+      }
+      const f = await prisma.actionPlan.findFirst({
+        where: { id: entityId, OR: or },
+        select: { id: true },
+      });
+      return !!f;
+    }
+    case "KPI": {
+      const f = await prisma.kPI.findFirst({
+        where: { id: entityId, ...personalKpiScopeFilter(scope) },
+        select: { id: true },
+      });
+      return !!f;
+    }
+  }
 }
 
 /** Varlığın güncel catchballStatus'unu okur (tip → model eşlemesi). Bulunamazsa null. */
@@ -71,8 +139,11 @@ export interface CatchballThread {
 
 /** Bir varlığın catchball geçmişi + güncel durumu. */
 export async function getThread(entityType: string, entityId: string): Promise<CatchballThread> {
-  const session = await getSession();
-  if (!session?.userId || !isEntityType(entityType)) {
+  const scope = await currentScope();
+  if (!scope || !isEntityType(entityType)) {
+    return { status: null, items: [] };
+  }
+  if (!(await canAccess(scope, entityType, entityId))) {
     return { status: null, items: [] };
   }
   const [status, items] = await Promise.all([
@@ -96,8 +167,8 @@ export async function postCatchball(input: {
   message: string;
   toUserId?: string;
 }): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session?.userId) {
+  const scope = await currentScope();
+  if (!scope) {
     return { success: false, error: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
   if (!isEntityType(input.entityType)) {
@@ -106,6 +177,9 @@ export async function postCatchball(input: {
   const message = input.message?.trim();
   if (!message) {
     return { success: false, error: "Mesaj boş olamaz." };
+  }
+  if (!(await canAccess(scope, input.entityType, input.entityId))) {
+    return { success: false, error: "Bu öğe için yetkiniz yok." };
   }
   const status = await readStatus(input.entityType, input.entityId);
   if (status === null) {
@@ -120,12 +194,12 @@ export async function postCatchball(input: {
           entityId: input.entityId,
           type: "COMMENT",
           message,
-          fromUserId: session.userId,
+          fromUserId: scope.id,
           toUserId: input.toUserId ?? null,
         },
       });
       await recordAudit(tx, {
-        actorUserId: session.userId,
+        actorUserId: scope.id,
         action: "CREATE",
         entityType: input.entityType,
         entityId: input.entityId,
@@ -158,8 +232,8 @@ export async function transitionCatchball(input: {
   itemType?: string;
   counterpartyUserId?: string;
 }): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session?.userId) {
+  const scope = await currentScope();
+  if (!scope) {
     return { success: false, error: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
   if (!isEntityType(input.entityType)) {
@@ -171,6 +245,9 @@ export async function transitionCatchball(input: {
   const message = input.message?.trim();
   if (!message) {
     return { success: false, error: "Geçiş için bir açıklama gereklidir." };
+  }
+  if (!(await canAccess(scope, input.entityType, input.entityId))) {
+    return { success: false, error: "Bu öğe için yetkiniz yok." };
   }
   const itemType: CatchballItemType =
     input.itemType && isItemType(input.itemType)
@@ -189,7 +266,7 @@ export async function transitionCatchball(input: {
         to: input.to as CatchballStatus,
         itemType,
         message,
-        actorUserId: session.userId,
+        actorUserId: scope.id,
         counterpartyUserId: input.counterpartyUserId ?? null,
         context: "transitionCatchball",
       });

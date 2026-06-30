@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -80,6 +81,7 @@ function linkLabel(t: TaskRow): string | null {
 }
 
 function TaskCard({ task }: { task: TaskRow }) {
+  const router = useRouter();
   const [status, setStatus] = useState(task.status);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -94,6 +96,10 @@ function TaskCard({ task }: { task: TaskRow }) {
       if (!res.success) {
         setStatus(prev); // geri al
         setError(res.error);
+      } else {
+        // Sunucu verisini tazele: sütun gruplaması yeniden hesaplansın (DONE → tamamlandı,
+        // CANCELLED → listeden çıkar). Aksi halde kart eski sütununda kalırdı.
+        router.refresh();
       }
     });
   };
@@ -106,7 +112,7 @@ function TaskCard({ task }: { task: TaskRow }) {
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2 flex-wrap">
           <Badge variant="outline" className="bg-zinc-900 text-zinc-300 border-zinc-700">
-            {TYPE_LABELS[task.type] ?? task.type}
+            {task.source === "MANUAL" ? "Elle Görev" : (TYPE_LABELS[task.type] ?? task.type)}
           </Badge>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <EscalationBadge level={task.escalationLevel} />
@@ -137,7 +143,6 @@ function TaskCard({ task }: { task: TaskRow }) {
               ))}
             </SelectContent>
           </Select>
-          {task.source === "MANUAL" && <span className="text-[10px] text-zinc-600 uppercase">Elle</span>}
         </div>
         {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
       </CardContent>
