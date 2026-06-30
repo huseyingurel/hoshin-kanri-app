@@ -3,20 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/actions/authActions";
-import { 
-  LayoutDashboard, 
-  Target, 
-  CheckSquare, 
-  BarChart2, 
-  Users, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Target,
+  CheckSquare,
+  BarChart2,
+  Users,
+  FileText,
   CalendarDays,
   Settings,
   LogOut,
-  BookOpen
+  BookOpen,
+  Bell,
+  History
 } from "lucide-react";
 
-export function Sidebar() {
+export function Sidebar({ unreadCount = 0, canViewAudit = false }: { unreadCount?: number; canViewAudit?: boolean }) {
   const pathname = usePathname();
 
   if (pathname === "/login") return null;
@@ -40,6 +42,17 @@ export function Sidebar() {
           <Users size={20} />
           <span>Dönem Değerlendirmelerim</span>
         </Link>
+        <Link href="/notifications" className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
+          <span className="flex items-center gap-3">
+            <Bell size={20} />
+            <span>Bildirimler</span>
+          </span>
+          {unreadCount > 0 && (
+            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs font-semibold flex items-center justify-center">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </Link>
         <Link href="/" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
           <LayoutDashboard size={20} />
           <span>Yönetici Paneli</span>
@@ -62,6 +75,12 @@ export function Sidebar() {
           </Link>
         </nav>
       <div className="mt-auto flex flex-col gap-1">
+        {canViewAudit && (
+          <Link href="/audit" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
+            <History size={20} />
+            <span>Denetim Kaydı</span>
+          </Link>
+        )}
         <Link href="/settings" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-800 hover:text-white transition-colors">
           <Settings size={20} />
           <span>Ayarlar</span>

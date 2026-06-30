@@ -6,6 +6,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { hoshinScopeFilter, type UserScope } from "@/lib/dataScope";
 import { isOrgWideRole } from "@/lib/access";
 import { redirect } from "next/navigation";
+import { CatchballThread } from "@/components/CatchballThread";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,40 @@ export default async function StrategyTree() {
       },
     },
   });
+
+  // Catchball: bu hoshinlere ait konuşma geçmişi (tek sorgu) + karşı taraf seçenekleri.
+  const hoshinIds = hoshins.map((h) => h.id);
+  const catchballItems = hoshinIds.length
+    ? await prisma.catchballItem.findMany({
+        where: { entityType: "HOSHIN", entityId: { in: hoshinIds } },
+        orderBy: { createdAt: "asc" },
+        include: {
+          fromUser: { select: { id: true, name: true } },
+          toUser: { select: { id: true, name: true } },
+        },
+      })
+    : [];
+  const threadByHoshin = new Map<string, typeof catchballItems>();
+  for (const it of catchballItems) {
+    const arr = threadByHoshin.get(it.entityId) ?? [];
+    arr.push(it);
+    threadByHoshin.set(it.entityId, arr);
+  }
+
+  const userOrderBy = { name: "asc" as const };
+  const counterpartyUsers = orgWide
+    ? await prisma.user.findMany({ orderBy: userOrderBy, select: { id: true, name: true } })
+    : scope.departmentId
+      ? await prisma.user.findMany({
+          where: { departmentId: scope.departmentId },
+          orderBy: userOrderBy,
+          select: { id: true, name: true },
+        })
+      : await prisma.user.findMany({
+          where: { id: scope.id },
+          orderBy: userOrderBy,
+          select: { id: true, name: true },
+        });
 
   return (
     <div className="flex flex-col gap-8 max-w-6xl mx-auto">
@@ -114,6 +149,16 @@ export default async function StrategyTree() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="p-6 pt-2">
+                <CatchballThread
+                  entityType="HOSHIN"
+                  entityId={hoshin.id}
+                  status={hoshin.catchballStatus}
+                  items={threadByHoshin.get(hoshin.id) ?? []}
+                  users={counterpartyUsers}
+                />
               </div>
             </CardContent>
           </Card>

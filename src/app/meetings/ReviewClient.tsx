@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, CalendarDays, CheckCircle2, ChevronRight, FileText, PlusCircle, Target, Users } from "lucide-react";
 import { createReview, createDecision } from "../actions/reviewActions";
 
-export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, users }: any) {
+export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, overdueTasks = [], users }: any) {
   const [activeTab, setActiveTab] = useState("agenda"); // agenda, history
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
 
@@ -289,6 +289,35 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, user
                       </Dialog>
                     </div>
                   </CardContent>
+                </Card>
+              ))
+            )}
+
+            {/* G7: gündeme vadesi geçmiş görevler (kabul kriteri #5). */}
+            <h3 className="text-lg font-semibold flex items-center gap-2 text-amber-400 mt-4">
+              <AlertCircle size={20} /> Vadesi Geçmiş Görevler
+            </h3>
+            {overdueTasks.length === 0 ? (
+              <Card className="bg-zinc-950 border-zinc-800">
+                <CardContent className="py-6 text-center text-zinc-500 text-sm">
+                  Vadesi geçmiş açık görev yok.
+                </CardContent>
+              </Card>
+            ) : (
+              overdueTasks.map((task: any) => (
+                <Card key={task.id} className="bg-zinc-950 border-amber-900/30">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base">{task.title}</CardTitle>
+                      <CardDescription className="mt-1 flex items-center gap-2">
+                        {task.assignee?.name && <span>Sorumlu: {task.assignee.name}</span>}
+                        {task.kpi?.name && <span className="text-zinc-500">• KPI: {task.kpi.name}</span>}
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 shrink-0">
+                      Vade: {task.dueDate ? new Date(task.dueDate).toLocaleDateString("tr-TR") : "-"}
+                    </Badge>
+                  </CardHeader>
                 </Card>
               ))
             )}

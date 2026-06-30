@@ -15,7 +15,7 @@ export default async function MeetingsPage() {
   if (!dbUser) redirect("/login");
 
   const reviews = await getReviews();
-  const { activeRedKpis, openCountermeasures } = await getReviewAgendaItems();
+  const { activeRedKpis, openCountermeasures, overdueTasks } = await getReviewAgendaItems();
 
   const orderBy = { name: "asc" as const };
   const users = isOrgWideRole(dbUser.role)
@@ -47,6 +47,7 @@ export default async function MeetingsPage() {
         reviews={reviews}
         activeRedKpis={activeRedKpis}
         openCountermeasures={openCountermeasures}
+        overdueTasks={overdueTasks}
         users={users}
       />
     </div>
