@@ -38,6 +38,7 @@ export const REPORT_KEYS = [
   "meetingMinutes", // toplantı tutanağı (reviewId gerekir)
   "hoshinProgress", // Hoshin ilerleme özeti
   "openDecisions", // açık kararlar
+  "bowling", // Bowling chart matrisi (KPI × dönem)
 ] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 

@@ -2,7 +2,8 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BarChart2, Target, AlertCircle, Download } from "lucide-react";
+import { BarChart2, Target, AlertCircle, Download, FileText } from "lucide-react";
+import { KpiBowlingGrid } from "./KpiBowlingGrid";
 import { getSessionOrRedirect } from "@/lib/session";
 import { kpiScopeFilter, type UserScope } from "@/lib/dataScope";
 import { isOrgWideRole } from "@/lib/access";
@@ -54,14 +55,26 @@ export default async function KpiBowlingChart() {
               : "Yalnızca erişim kapsamınızdaki KPI'lar için dönemsel görünüm."}
           </p>
         </div>
-        <a
-          href="/api/export/kpiStatus?format=xlsx"
-          className="inline-flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-600/20 shrink-0"
-        >
-          <Download size={16} />
-          Dışa Aktar (Excel)
-        </a>
+        <div className="flex gap-2 shrink-0">
+          <a
+            href="/api/export/kpiStatus?format=xlsx"
+            className="inline-flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-600/20"
+          >
+            <Download size={16} />
+            Dışa Aktar (Excel)
+          </a>
+          <a
+            href="/api/export/bowling?format=pdf"
+            className="inline-flex items-center gap-2 rounded-md border border-rose-600/30 bg-rose-600/10 px-3 py-2 text-sm font-medium text-rose-400 hover:bg-rose-600/20"
+          >
+            <FileText size={16} />
+            Grafiği Dışa Aktar (PDF)
+          </a>
+        </div>
       </div>
+
+      {/* FR-18/19: renkli hücre matrisi + trend */}
+      <KpiBowlingGrid kpis={kpis} />
 
       <div className="flex flex-col gap-6">
         {kpis.map((kpi) => (

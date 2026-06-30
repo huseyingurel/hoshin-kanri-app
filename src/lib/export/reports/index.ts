@@ -10,5 +10,6 @@ import "@/lib/export/reports/redKpiCountermeasures.report";
 import "@/lib/export/reports/hoshinProgress.report";
 import "@/lib/export/reports/openDecisions.report";
 import "@/lib/export/reports/meetingMinutes.report";
+import "@/lib/export/reports/bowling.report";
 
 export { getReport, REPORTS, type ReportContext, type ReportDef } from "@/lib/export/reports/registry";
