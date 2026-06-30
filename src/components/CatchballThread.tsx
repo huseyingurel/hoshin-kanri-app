@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageSquare, CheckCircle2, XCircle } from "lucide-react";
 import { postCatchball, transitionCatchball } from "@/app/actions/catchballActions";
+import { ORG_WIDE_ROLES, DEPARTMENT_SCOPED_ROLES } from "@/lib/domainTypes";
 
 /**
  * Yalnız UI amaçlı geçiş haritası — hangi düğmelerin gösterileceğini belirler.
@@ -40,12 +41,31 @@ const STATUS_CLASS: Record<string, string> = {
   REJECTED: "bg-rose-500/10 text-rose-400 border-rose-500/20",
 };
 
+/** FR-08: durum değiştirmeyen (geçiş gerektirmeyen) öğe tipleri. */
+const POST_ITEM_TYPES = [
+  { value: "COMMENT", label: "Yorum" },
+  { value: "REVISION_REQUEST", label: "Revizyon Talebi" },
+  { value: "COUNTER_PROPOSAL", label: "Karşı Öneri" },
+];
+
 const ITEM_TYPE_LABELS: Record<string, string> = {
   COMMENT: "Yorum",
   REVISION_REQUEST: "Revizyon Talebi",
   COUNTER_PROPOSAL: "Karşı Öneri",
   APPROVAL: "Onay",
   REJECTION: "Ret",
+};
+
+/** FR-09: yönlendirilebilecek roller. */
+const ALL_ROLES: string[] = [...ORG_WIDE_ROLES, ...DEPARTMENT_SCOPED_ROLES];
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "Sistem Yöneticisi",
+  PMO: "PMO",
+  EXECUTIVE: "Yönetici",
+  DEPT_HEAD: "Departman Başkanı",
+  KPI_OWNER: "KPI Sahibi",
+  USER: "Kullanıcı",
 };
 
 type ThreadItem = {
@@ -59,6 +79,7 @@ type ThreadItem = {
 };
 
 type UserOption = { id: string; name: string };
+type DeptOption = { id: string; name: string };
 
 function fmt(d: string | Date): string {
   return new Date(d).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
@@ -70,15 +91,23 @@ export function CatchballThread({
   status,
   items,
   users,
+  departments = [],
 }: {
   entityType: string;
   entityId: string;
   status: string | null;
   items: ThreadItem[];
   users: UserOption[];
+  /** FR-09: departman yönlendirme seçenekleri. */
+  departments?: DeptOption[];
 }) {
   const [message, setMessage] = useState("");
   const [counterparty, setCounterparty] = useState("");
+  // FR-08: öğe tipi seçici
+  const [itemType, setItemType] = useState("COMMENT");
+  // FR-09: rol ve departman yönlendirme
+  const [toRole, setToRole] = useState("");
+  const [toDeptId, setToDeptId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -108,6 +137,9 @@ export function CatchballThread({
         entityId,
         message,
         toUserId: counterparty || undefined,
+        itemType: itemType || "COMMENT",
+        toRole: toRole || undefined,
+        toDeptId: toDeptId || undefined,
       }),
     );
   };
@@ -124,6 +156,8 @@ export function CatchballThread({
         to,
         message,
         counterpartyUserId: counterparty || undefined,
+        toRole: toRole || undefined,
+        toDeptId: toDeptId || undefined,
       }),
     );
   };
@@ -150,6 +184,7 @@ export function CatchballThread({
         )}
       </div>
 
+      {/* FR-08: tüm öğe tipleri içeren catchball geçmişi */}
       {items.length > 0 && (
         <div className="flex flex-col gap-2">
           {items.map((it) => (
@@ -161,6 +196,9 @@ export function CatchballThread({
                 </Badge>
                 {it.resultingStatus && (
                   <span className="text-zinc-600">→ {STATUS_LABELS[it.resultingStatus] ?? it.resultingStatus}</span>
+                )}
+                {it.toUser && (
+                  <span className="text-zinc-600">@ {it.toUser.name}</span>
                 )}
                 <span className="ml-auto">{fmt(it.createdAt)}</span>
               </div>
@@ -178,11 +216,28 @@ export function CatchballThread({
           className="bg-zinc-900 border-zinc-800 text-sm"
           disabled={isPending}
         />
+
+        {/* Birinci satır: FR-08 öğe tipi + karşı taraf kullanıcı */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={counterparty} onValueChange={(v) => setCounterparty(v || "")}>
+          <Select value={itemType} onValueChange={(v) => { if (v !== null) setItemType(v); }}>
+            <SelectTrigger className="bg-zinc-900 border-zinc-800 h-8 w-44 text-xs">
+              <SelectValue placeholder="Öğe tipi">
+                {POST_ITEM_TYPES.find((t) => t.value === itemType)?.label ?? itemType}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              {POST_ITEM_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value} className="text-xs">
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={counterparty} onValueChange={(v) => setCounterparty(v !== null ? v : "")}>
             <SelectTrigger className="bg-zinc-900 border-zinc-800 h-8 w-48 text-xs">
-              <SelectValue placeholder="Karşı taraf (opsiyonel)">
-                {counterparty ? users.find((u) => u.id === counterparty)?.name : "Karşı taraf (opsiyonel)"}
+              <SelectValue placeholder="Kullanıcı (opsiyonel)">
+                {counterparty ? users.find((u) => u.id === counterparty)?.name : "Kullanıcı (opsiyonel)"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent className="bg-zinc-900 border-zinc-800">
@@ -193,6 +248,47 @@ export function CatchballThread({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* FR-09: rol + departman yönlendirme */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={toRole} onValueChange={(v) => setToRole(v !== null ? v : "")}>
+            <SelectTrigger className="bg-zinc-900 border-zinc-800 h-8 w-44 text-xs">
+              <SelectValue placeholder="Role yönlendir (opsiyonel)">
+                {toRole ? (ROLE_LABELS[toRole] ?? toRole) : "Role yönlendir (opsiyonel)"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              {ALL_ROLES.map((r) => (
+                <SelectItem key={r} value={r} className="text-xs">
+                  {ROLE_LABELS[r] ?? r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {departments.length > 0 && (
+            <Select value={toDeptId} onValueChange={(v) => setToDeptId(v !== null ? v : "")}>
+              <SelectTrigger className="bg-zinc-900 border-zinc-800 h-8 w-48 text-xs">
+                <SelectValue placeholder="Departmana yönlendir (opsiyonel)">
+                  {toDeptId
+                    ? departments.find((d) => d.id === toDeptId)?.name
+                    : "Departmana yönlendir (opsiyonel)"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-800">
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Aksiyonlar: gönder + durum geçiş düğmeleri */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             size="sm"
             variant="outline"
@@ -200,7 +296,7 @@ export function CatchballThread({
             disabled={isPending}
             className="bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 h-8"
           >
-            Yorum Ekle
+            Gönder
           </Button>
           {nextOptions.map((to) => (
             <Button

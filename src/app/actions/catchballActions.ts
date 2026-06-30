@@ -160,12 +160,23 @@ export async function getThread(entityType: string, entityId: string): Promise<C
   return { status, items };
 }
 
-/** Durum değiştirmeyen bir yorum/not ekler (COMMENT). Denetlenir. */
+/**
+ * Durum değiştirmeyen bir yorum/not ekler.
+ * `itemType` belirtilmezse `COMMENT`'e varsayılan olarak atanır.
+ * Durum geçişi gerektiren tipler (APPROVAL, REJECTION) burada reddedilir;
+ * bunlar `transitionCatchball` üzerinden yönetilir.
+ * FR-08: REVISION_REQUEST ve COUNTER_PROPOSAL de bu yol üzerinden iletilir.
+ * FR-09: `toRole` / `toDeptId` ile rol veya departmana yönlendirme.
+ */
 export async function postCatchball(input: {
   entityType: string;
   entityId: string;
   message: string;
   toUserId?: string;
+  /** COMMENT | REVISION_REQUEST | COUNTER_PROPOSAL (varsayılan: COMMENT). */
+  itemType?: string;
+  toRole?: string;
+  toDeptId?: string;
 }): Promise<ActionResult> {
   const scope = await currentScope();
   if (!scope) {
@@ -186,16 +197,29 @@ export async function postCatchball(input: {
     return { success: false, error: "Varlık bulunamadı." };
   }
 
+  // Durum geçişi gerektiren tipler bu yoldan geçemez.
+  const TRANSITION_ONLY_TYPES = ["APPROVAL", "REJECTION"];
+  const resolvedItemType =
+    input.itemType && isItemType(input.itemType) ? input.itemType : "COMMENT";
+  if (TRANSITION_ONLY_TYPES.includes(resolvedItemType)) {
+    return {
+      success: false,
+      error: "APPROVAL ve REJECTION yalnızca transitionCatchball üzerinden gönderilebilir.",
+    };
+  }
+
   try {
     await prisma.$transaction(async (tx) => {
       const item = await tx.catchballItem.create({
         data: {
           entityType: input.entityType,
           entityId: input.entityId,
-          type: "COMMENT",
+          type: resolvedItemType,
           message,
           fromUserId: scope.id,
           toUserId: input.toUserId ?? null,
+          toRole: input.toRole ?? null,
+          toDeptId: input.toDeptId ?? null,
         },
       });
       await recordAudit(tx, {
@@ -210,6 +234,7 @@ export async function postCatchball(input: {
         entityType: input.entityType,
         entityId: input.entityId,
         itemId: item.id,
+        itemType: resolvedItemType,
       });
     });
   } catch (e) {
@@ -223,7 +248,11 @@ export async function postCatchball(input: {
   return { success: true };
 }
 
-/** Catchball durum geçişi uygular (engine/applyTransition'a devreder). İzinsiz geçiş → hata (INV-7). */
+/**
+ * Catchball durum geçişi uygular (engine/applyTransition'a devreder). İzinsiz geçiş → hata (INV-7).
+ * FR-09: `toRole` / `toDeptId` ile rol veya departmana yönlendirme; engine bu alanları
+ * `CatchballItem` üzerine yazar (applyTransition zaten destekler).
+ */
 export async function transitionCatchball(input: {
   entityType: string;
   entityId: string;
@@ -231,6 +260,8 @@ export async function transitionCatchball(input: {
   message: string;
   itemType?: string;
   counterpartyUserId?: string;
+  toRole?: string;
+  toDeptId?: string;
 }): Promise<ActionResult> {
   const scope = await currentScope();
   if (!scope) {
@@ -268,6 +299,8 @@ export async function transitionCatchball(input: {
         message,
         actorUserId: scope.id,
         counterpartyUserId: input.counterpartyUserId ?? null,
+        toRole: input.toRole ?? null,
+        toDeptId: input.toDeptId ?? null,
         context: "transitionCatchball",
       });
     });
