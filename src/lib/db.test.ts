@@ -180,4 +180,14 @@ describe("pagination", () => {
     expect(out).toHaveLength(1);
     expect(fn.mock.calls.length).toBe(1);
   });
+
+  it("sends limit/offset as STRINGS (SearchRecords rejects numeric)", async () => {
+    const fn = mockRpc((m) =>
+      m === "SearchRecords" ? res(200, { total: 0, items: [] }) : res(404, {}),
+    );
+    await db.findOpenCountermeasure("k1");
+    const body = JSON.parse(fn.mock.calls[0][1].body);
+    expect(typeof body.limit).toBe("string");
+    expect(typeof body.offset).toBe("string");
+  });
 });

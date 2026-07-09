@@ -136,10 +136,13 @@ async function fetchAllPages<T>(
   const byId = new Map<string, CollectionRecord<T>>();
   let offset = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
+    // `limit`/`offset` MUST be strings — SearchRecords rejects numeric values with
+    // "Invalid limit: Value must be a valid string" (verified live 2026-07-09). Same
+    // string-typed-arg quirk as `data`/`query` elsewhere on this service.
     const res = await rpc<ListResponse<T>>(method, {
       ...baseBody,
-      limit: PAGE_LIMIT,
-      offset,
+      limit: String(PAGE_LIMIT),
+      offset: String(offset),
     });
     const items = res.items ?? [];
     if (items.length === 0) break;
