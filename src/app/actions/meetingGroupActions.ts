@@ -173,11 +173,13 @@ export async function assignTaskToMeeting(
   }
 
   try {
-    const count = await prisma.$transaction((tx) =>
-      fanoutTasks(tx, scope.id, userIds, input, {
-        context: "assignTaskToMeeting",
-        summaryLabel: "Toplantı grubuna görev atandı",
-      }),
+    const count = await prisma.$transaction(
+      (tx) =>
+        fanoutTasks(tx, scope.id, userIds, input, {
+          context: "assignTaskToMeeting",
+          summaryLabel: "Toplantı grubuna görev atandı",
+        }),
+      { timeout: 20000 }, // büyük katılımcı listesinde ardışık insert'ler varsayılan 5s'i aşabilir
     );
     logEvent("info", "task.assignedToMeeting", { reviewId, count });
     revalidatePath("/my-tasks");
@@ -214,12 +216,14 @@ export async function assignTaskToRole(role: string, input: TaskFanoutInput): Pr
   }
 
   try {
-    const count = await prisma.$transaction((tx) =>
-      fanoutTasks(tx, scope.id, userIds, input, {
-        assigneeRole: role,
-        context: "assignTaskToRole",
-        summaryLabel: `Rol (${role}) görev atandı`,
-      }),
+    const count = await prisma.$transaction(
+      (tx) =>
+        fanoutTasks(tx, scope.id, userIds, input, {
+          assigneeRole: role,
+          context: "assignTaskToRole",
+          summaryLabel: `Rol (${role}) görev atandı`,
+        }),
+      { timeout: 20000 }, // kalabalık bir rolde ardışık insert'ler varsayılan 5s'i aşabilir
     );
     logEvent("info", "task.assignedToRole", { role, count });
     revalidatePath("/my-tasks");

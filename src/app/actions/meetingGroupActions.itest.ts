@@ -107,6 +107,36 @@ describe("meetingGroupActions (FR-26 entegrasyon)", () => {
     expect(res.error).toMatch(/katılımcı yok/);
   });
 
+  it("organizatör (kurum geneli olmayan) kendi toplantısının grubuna görev atayabilir", async () => {
+    const seed = await seedGovernance(prisma);
+    const review = await makeReview(seed.ownerId); // organizatör = KPI_OWNER
+    h.userId = seed.ownerId;
+    await addReviewParticipant(review.id, seed.managerId);
+
+    const res = await assignTaskToMeeting(review.id, { title: "Grup görevi" });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.count).toBe(1);
+  });
+
+  it("kurum geneli olmayan ve organizatör olmayan kullanıcı gruba görev atayamaz", async () => {
+    const seed = await seedGovernance(prisma);
+    const review = await makeReview(seed.pmoId); // organizatör başkası
+    // Katılımcı var ki reddin sebebi 'boş grup' değil 'yetki' olsun.
+    h.userId = seed.pmoId;
+    await addReviewParticipant(review.id, seed.managerId);
+
+    h.userId = seed.ownerId; // KPI_OWNER, organizatör değil
+    const res = await assignTaskToMeeting(review.id, { title: "İzinsiz" });
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error).toMatch(/yetkiniz yok/);
+
+    // Yetkisiz çağrı hiç görev yaratmamalı.
+    const leaked = await prisma.task.count({ where: { title: "İzinsiz" } });
+    expect(leaked).toBe(0);
+  });
+
   // --- role göre görev ata ---
 
   it("role göre görev, o roldeki tüm kullanıcılara dağıtılır ve assigneeRole kaydeder", async () => {

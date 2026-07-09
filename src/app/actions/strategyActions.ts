@@ -170,7 +170,7 @@ export async function duplicateHoshin(hoshinId: string): Promise<ActionResult> {
       });
 
       return clone.id;
-    });
+    }, { timeout: 20000 }); // derin ağaç çok sayıda ardışık insert içerir — varsayılan 5s'i aşabilir
 
     revalidatePath("/strategy");
     return { success: true, hoshinId: newId };
