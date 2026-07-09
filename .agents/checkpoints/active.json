@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "updated_at": "2026-07-09T13:51:10Z",
+  "updated_by": "Codex",
+  "task": {
+    "id": "hoshin-kanri-app-governance-collections-adapter",
+    "goal": "Maintain and safely evolve the Hoshin Kanri PoC while preserving behavior, auth/data-scope guarantees, and the Collections-adapter migration path.",
+    "status": "in_progress"
+  },
+  "repo_state": {
+    "repo": "/home/gulp/projects/emploid/hoshin-kanri-app/feat-governance-layer",
+    "base_branch": "origin/main",
+    "working_branch": "feat/governance-layer",
+    "upstream": "origin/feat/governance-layer",
+    "last_known_commit": "c063812",
+    "dirty_files": [],
+    "untracked_paths": [],
+    "parent_coordination_repo": {
+      "path": "/home/gulp/projects/emploid/main",
+      "branch": "main",
+      "last_known_commit": "153ea68",
+      "status": "has untracked .codex/.claude skill files and research/ at last check"
+    }
+  },
+  "current_focus": {
+    "owner": "implementer",
+    "phase": "memory-file-consolidation",
+    "next_action": "Operational metadata is staged and verification passed; commit only after an explicit commit instruction."
+  },
+  "done": [
+    "Confirmed this repo is a linked worktree at /home/gulp/projects/emploid/hoshin-kanri-app/feat-governance-layer.",
+    "Confirmed branch feat/governance-layer tracks origin/feat-governance-layer.",
+    "Committed and pushed c063812 fix(db): stringify SearchRecords pagination args.",
+    "Added repo-local checkpoint protocol and handoff skill conventions for this app repo.",
+    "Consolidated AGENTS.md and CLAUDE.md into symlinks to .agents/memory.md.",
+    "Moved product and architecture orientation from harness memory into README.md."
+  ],
+  "proven": [
+    "The app repo is separate from the parent coordination repo and should keep its own operational checkpoint state.",
+    "Collections SearchRecords rejects numeric pagination limit/offset; send them as strings.",
+    "SearchRecords is the working Collections scoped-read primitive; QueryRecords structured filters are inert per parent contract docs.",
+    "This app uses Next.js 16.2.4 with src/proxy.ts, not legacy middleware.ts.",
+    "Auth/data scope must stay server-side; client-side filtering alone is not sufficient.",
+    "AGENTS.md and CLAUDE.md are symlinks to .agents/memory.md."
+  ],
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "When should saveKpiRecord be validated end-to-end against live Collections through the Next.js app?",
+      "blocking": false,
+      "owner": "implementer"
+    },
+    {
+      "id": "q2",
+      "question": "What production credential replaces EMPLOID_SESSION_COOKIE for server-to-server Collections writes?",
+      "blocking": true,
+      "owner": "platform"
+    },
+    {
+      "id": "q3",
+      "question": "Should future app handoffs be mirrored to docs/handoffs/ or kept only under .agents/handoffs/?",
+      "blocking": false,
+      "owner": "coordinator"
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "area": "auth-scope",
+      "risk": "Weakening auth, authorization, or data-scope checks can expose cross-department data.",
+      "mitigation": "Use src/lib/access.ts and src/lib/dataScope.ts server-side helpers; add focused tests for new mutation/query surfaces."
+    },
+    {
+      "id": "r2",
+      "area": "secrets",
+      "risk": "Local .env, prod clones, session cookies, and DB URLs may contain real secrets or plaintext passwords.",
+      "mitigation": "Never commit secrets, dumps, clone SQL, or session-cookie values."
+    },
+    {
+      "id": "r3",
+      "area": "nextjs",
+      "risk": "Next.js 16 behavior differs from older App Router guidance.",
+      "mitigation": "Read node_modules/next/dist/docs/ before changing Next.js routing, caching, build, or proxy behavior."
+    }
+  ],
+  "verification": {
+    "last_command": "git -C feat-governance-layer diff --cached --check",
+    "last_result": "passed with no whitespace or patch errors; operational metadata and README update only, so no runtime tests were required",
+    "failures": [],
+    "next_required": "If committing these staged metadata changes, inspect final status and commit. For code changes, run focused tests first, then npm test / npm run test:int / npm run build as scope requires."
+  },
+  "handoff": {
+    "summary_file": ".agents/handoffs/2026-07-09T12-24-36Z-local-handoff-rules.md",
+    "resume_prompt": "Continue from .agents/checkpoints/active.json. Read .agents/memory.md, README.md, docs/OPERATIONS.md, and the relevant handoff before touching app code."
+  }
+}
