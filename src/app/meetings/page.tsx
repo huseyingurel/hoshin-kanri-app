@@ -49,6 +49,7 @@ export default async function MeetingsPage() {
         openCountermeasures={openCountermeasures}
         overdueTasks={overdueTasks}
         users={users}
+        orgWide={isOrgWideRole(dbUser.role)}
       />
     </div>
   );

@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, CalendarDays, CheckCircle2, ChevronRight, FileText, PlusCircle, Target, Users, ListTodo, ArrowRightCircle } from "lucide-react";
 import { createReview, createDecision, getReviewAgenda } from "../actions/reviewActions";
 import { createActionPlanFromDecision } from "../actions/actionPlanActions";
+import { MeetingGroupPanel } from "@/components/MeetingGroupPanel";
 
-export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, overdueTasks = [], users }: any) {
+export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, overdueTasks = [], users, orgWide = false }: any) {
   const [activeTab, setActiveTab] = useState("agenda"); // agenda, history
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
 
@@ -273,9 +274,9 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button 
-                      size="sm" 
-                      onClick={handleCreateDecision} 
+                    <Button
+                      size="sm"
+                      onClick={handleCreateDecision}
                       disabled={!decisionText || !!selectedKpiId}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
@@ -283,6 +284,9 @@ export function ReviewClient({ reviews, activeRedKpis, openCountermeasures, over
                     </Button>
                   </CardContent>
                 </Card>
+
+                {/* FR-26: toplantı grubu (katılımcı roster'ı) + gruba/role göre görev atama */}
+                <MeetingGroupPanel reviewId={selectedReviewId} users={users} orgWide={orgWide} />
               </div>
             )}
           </div>

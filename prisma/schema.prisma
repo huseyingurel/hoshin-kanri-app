@@ -42,6 +42,7 @@ model User {
   periodRecordsSubmitted KPIPeriodRecord[] @relation("PeriodRecordSubmitter")
   countermeasuresOwned Countermeasure[] @relation("CountermeasureOwner")
   reviewsOrganized     Review[]  @relation("ReviewOrganizer")
+  reviewParticipations ReviewParticipant[] @relation("ReviewParticipant")
   decisionsAssigned    Decision[] @relation("DecisionAssignee")
 
   departmentHeadOf     Department[] @relation("DepartmentHead")
@@ -241,9 +242,24 @@ model Review {
   organizer            User?    @relation("ReviewOrganizer", fields: [organizerId], references: [id])
 
   decisions            Decision[]
-  
+  // FR-26: toplantı katılımcı listesi (toplantı grubu) — göreve grup ataması bu roster'a dağıtılır.
+  participants         ReviewParticipant[]
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// FR-26: bir inceleme/toplantının katılımcı roster'ı ("toplantı grubu").
+model ReviewParticipant {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("ReviewParticipant", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+  @@index([reviewId])
 }
 
 model Decision {
@@ -312,6 +328,9 @@ model Task {
   assignee          User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
   assigneeDeptId    String?
   assigneeDept      Department? @relation("TaskAssigneeDept", fields: [assigneeDeptId], references: [id])
+  // FR-26: role-hedefli görev kaynağı (rol adı). Fan-out ile somut kullanıcılara dağıtılır;
+  // atanan görevde köken rolü kaydını tutar.
+  assigneeRole      String?
 
   // Kaynak varlığa yumuşak bağlar (yalnız ilgili olan(lar) doldurulur)
   kpiId             String?

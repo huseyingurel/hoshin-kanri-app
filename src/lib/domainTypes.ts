@@ -6,6 +6,12 @@ export type OrgWideRole = (typeof ORG_WIDE_ROLES)[number];
 export const DEPARTMENT_SCOPED_ROLES = ["DEPT_HEAD", "KPI_OWNER", "USER"] as const;
 export type DepartmentScopedRole = (typeof DEPARTMENT_SCOPED_ROLES)[number];
 
+/** Göreve rol-bazlı atama için geçerli roller (FR-26). */
+export const ASSIGNABLE_ROLES = [...ORG_WIDE_ROLES, ...DEPARTMENT_SCOPED_ROLES] as const;
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+export const isAssignableRole = (v: unknown): v is AssignableRole =>
+  typeof v === "string" && (ASSIGNABLE_ROLES as readonly string[]).includes(v);
+
 export const KPI_RAG_COLORS = ["GREEN", "AMBER", "RED"] as const;
 export type KpiRagColor = (typeof KPI_RAG_COLORS)[number];
 
@@ -145,3 +151,5 @@ export const isReportingFrequency = (v: unknown): v is ReportingFrequency =>
   typeof v === "string" && (REPORTING_FREQUENCIES as readonly string[]).includes(v);
 export const isKpiRagColor = (v: unknown): v is KpiRagColor =>
   typeof v === "string" && (KPI_RAG_COLORS as readonly string[]).includes(v);
+export const isTaskPriority = (v: unknown): v is TaskPriority =>
+  typeof v === "string" && (TASK_PRIORITIES as readonly string[]).includes(v);
