@@ -8,6 +8,7 @@ import { isOrgWideRole } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { CatchballThread } from "@/components/CatchballThread";
 import { LifecycleStatusSelect } from "@/components/LifecycleStatusSelect";
+import { DuplicateHoshinButton } from "@/components/DuplicateHoshinButton";
 
 export const dynamic = "force-dynamic";
 
@@ -182,13 +183,17 @@ export default async function StrategyTree() {
                       <h2 className="text-2xl font-bold text-white">{hoshin.title}</h2>
                       <p className="text-zinc-400 mt-1 max-w-2xl">{hoshin.description}</p>
                     </div>
-                    {/* FR-06: Hoshin durum seçici */}
-                    <LifecycleStatusSelect
-                      entityType="HOSHIN"
-                      entityId={hoshin.id}
-                      currentStatus={hoshin.status}
-                      canEdit={orgWide}
-                    />
+                    <div className="flex flex-col items-end gap-2">
+                      {/* FR-06: Hoshin durum seçici */}
+                      <LifecycleStatusSelect
+                        entityType="HOSHIN"
+                        entityId={hoshin.id}
+                        currentStatus={hoshin.status}
+                        canEdit={orgWide}
+                      />
+                      {/* FR-04: şablondan çoğaltma (yalnız kurum geneli roller) */}
+                      {orgWide && <DuplicateHoshinButton hoshinId={hoshin.id} />}
+                    </div>
                   </div>
                 </div>
 
