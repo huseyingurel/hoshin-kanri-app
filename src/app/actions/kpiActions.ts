@@ -24,12 +24,18 @@ export type SaveKpiRecordResult = ActionResult;
  * MIGRATION: this action's data layer runs on the emploid.ai **Collections** service via
  * `@/lib/db`, not Prisma/Postgres. The mechanics were proven live by the 2026-07-09 spike
  * (see the parent repo's `docs/plans/tracer-bullet-productionize.md`). Because Collections
- * has no multi-record transaction, the former `prisma.$transaction` block is a deterministic
- * sequence: the period record is written first (source of truth) and every subsequent write
- * is idempotent (countermeasure dedups on the open one; task/notification dedup on their
- * keys). A retry after a partial failure converges rather than duplicates. The pure domain
- * logic (RAG, escalation, calendar, diff) is unchanged. `lockPeriod`/`reopenPeriod` below
- * still use Prisma pending their own adapter swap.
+ * has **no multi-record transaction**, the former `prisma.$transaction` block is a
+ * best-effort sequence, NOT atomic:
+ *  - The countermeasure, task, and notification writes are idempotent (dedup on an open
+ *    countermeasure / on their dedupe keys), so re-running is safe for them.
+ *  - The period record and its audit row are NOT deduped — a failure *after* they are
+ *    written leaves them in place, and a retry appends new ones. This partial-write /
+ *    duplicate-on-retry window is the documented tracer tradeoff (the transactional-write
+ *    ask in the plan); acceptable at this stage, flagged for a real fix.
+ * The pure domain logic (RAG, escalation, calendar, diff) is unchanged, as are all
+ * Turkish messages and error semantics. `lockPeriod`/`reopenPeriod` below still use Prisma
+ * pending their own adapter swap — so a lock they write to Postgres is not yet visible to
+ * the Collections-backed lock check above (a known cross-backend gap during the migration).
  */
 export async function saveKpiRecord(
   kpiId: string,

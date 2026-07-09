@@ -110,36 +110,64 @@ async function rpc<T = unknown>(
 }
 
 interface ListResponse<T> {
-  total: number;
-  limit: number;
-  offset: number;
-  items: CollectionRecord<T>[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  items?: CollectionRecord<T>[];
 }
 
-/** All rows of a collection (paginated read; the filter arg on `QueryRecords` is inert). */
+const PAGE_LIMIT = 100;
+const MAX_PAGES = 1000; // backstop against an unbounded loop
+
+/**
+ * Reads every page of a `ListRecords`/`SearchRecords` result, de-duplicated by record id.
+ *
+ * The default page (no `limit`) would silently truncate large result sets — for the dedup
+ * reads that back this adapter's idempotency (open-countermeasure lookup, task/notification
+ * dedup, lock check) a truncated page is a correctness bug, not just a perf one. So we
+ * page explicitly on `offset`. The "no new ids this page" guard makes this safe even on a
+ * build that ignores `offset` (it would re-return page 1 forever): we stop instead of
+ * looping, degrading to first-page coverage rather than hanging.
+ */
+async function fetchAllPages<T>(
+  method: "ListRecords" | "SearchRecords",
+  baseBody: Record<string, unknown>,
+): Promise<CollectionRecord<T>[]> {
+  const byId = new Map<string, CollectionRecord<T>>();
+  let offset = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await rpc<ListResponse<T>>(method, {
+      ...baseBody,
+      limit: PAGE_LIMIT,
+      offset,
+    });
+    const items = res.items ?? [];
+    if (items.length === 0) break;
+    const sizeBefore = byId.size;
+    for (const item of items) byId.set(item.id, item);
+    // Stop on: a short (final) page; a page that added nothing new (offset ignored / fully
+    // overlapping — prevents an infinite loop); or having reached a server-reported total.
+    // When `total` is absent we keep going until a short/empty page, so an exact multiple of
+    // PAGE_LIMIT is not truncated.
+    if (items.length < PAGE_LIMIT) break;
+    if (byId.size === sizeBefore) break;
+    if (typeof res.total === "number" && byId.size >= res.total) break;
+    offset += PAGE_LIMIT;
+  }
+  return [...byId.values()];
+}
+
+/** All rows of a collection (the filter arg on `QueryRecords` is inert, so we page all). */
 async function listRecords<T = Record<string, unknown>>(
   collectionId: string,
 ): Promise<CollectionRecord<T>[]> {
-  const out: CollectionRecord<T>[] = [];
-  let offset = 0;
-  const limit = 100;
-  for (;;) {
-    const page = await rpc<ListResponse<T>>("ListRecords", {
-      collectionId,
-      limit,
-      offset,
-    });
-    out.push(...(page.items ?? []));
-    if (!page.items?.length || out.length >= (page.total ?? out.length)) break;
-    offset += limit;
-  }
-  return out;
+  return fetchAllPages<T>("ListRecords", { collectionId });
 }
 
 /**
  * Server-side substring filter, unioned across (field,value) pairs. Because `SearchRecords`
- * is a substring match, callers MUST refine exactly in JS. Returns the raw candidate set;
- * de-duplicated by record id.
+ * is a substring match, callers MUST refine exactly in JS. Returns the raw candidate set,
+ * fully paged and de-duplicated by record id.
  */
 async function searchUnion<T = Record<string, unknown>>(
   collectionId: string,
@@ -148,14 +176,16 @@ async function searchUnion<T = Record<string, unknown>>(
   const byId = new Map<string, CollectionRecord<T>>();
   for (const { fields, q } of queries) {
     if (!q) continue;
-    const page = await rpc<ListResponse<T>>("SearchRecords", {
-      collectionId,
-      fields,
-      q,
-    });
-    for (const item of page.items ?? []) byId.set(item.id, item);
+    const items = await fetchAllPages<T>("SearchRecords", { collectionId, fields, q });
+    for (const item of items) byId.set(item.id, item);
   }
   return [...byId.values()];
+}
+
+/** True when a 500 body indicates a missing/soft-deleted target (vs. a real server error). */
+function isNotFoundDetail(detail: unknown): boolean {
+  const s = typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+  return /not found|already deleted|does not exist/i.test(s);
 }
 
 async function getRecordById<T = Record<string, unknown>>(
@@ -169,7 +199,13 @@ async function getRecordById<T = Record<string, unknown>>(
     });
     return r?.id ? r : null;
   } catch (e) {
-    if (e instanceof CollectionsError && e.status === 500) return null; // not found / deleted
+    // A soft-deleted / unknown id returns 500 "Record not found or already deleted" — that
+    // is a legitimate "no record". Any OTHER 500 (auth, transport, server) is a real failure
+    // and must propagate, so callers fail loudly instead of silently reading `null` (which
+    // here would masquerade as "user/KPI not found").
+    if (e instanceof CollectionsError && e.status === 500 && isNotFoundDetail(e.detail)) {
+      return null;
+    }
     throw e;
   }
 }
@@ -183,6 +219,11 @@ async function createRecord<T extends Record<string, unknown>>(
     dataModelId: DATA_MODEL_ID,
     data: JSON.stringify(data),
   });
+  // Guard the silent-bad-write case: a 2xx with no record id would otherwise return
+  // `undefined` and let downstream rows reference a non-existent entity.
+  if (!r?.id) {
+    throw new CollectionsError("CreateRecord", 200, r ?? "empty response (no record id)");
+  }
   return r.id;
 }
 
@@ -229,6 +270,10 @@ function num(v: unknown): number | null {
 }
 function str(v: unknown): string | null {
   return v === null || v === undefined || v === "" ? null : String(v);
+}
+/** Coerce a Collections boolean field, tolerating a stringified `"true"`/`"false"`. */
+function bool(v: unknown): boolean {
+  return v === true || v === "true";
 }
 
 function toAppUser(r: CollectionRecord): AppUser {
@@ -304,16 +349,21 @@ export async function getHoshinSponsorForKpi(
   actionPlanId: string | null,
 ): Promise<string | null> {
   if (!actionPlanId) return null;
-  // FK walk kpi → action_plan → major_task → hoshin. Level-2-escalation-only path; kept
-  // defensive so a missing link degrades to "no sponsor" rather than throwing.
-  const ap = await getRecordById(COLLECTIONS.actionPlan, actionPlanId);
-  const majorTaskId = str(ap?.data.aplan_majorTaskId);
-  if (!majorTaskId) return null;
-  const mt = await getRecordById(COLLECTIONS.majorTask, majorTaskId);
-  const hoshinId = str(mt?.data.mtask_hoshinId);
-  if (!hoshinId) return null;
-  const h = await getRecordById(COLLECTIONS.hoshin, hoshinId);
-  return str(h?.data.hsh_sponsorUserId);
+  try {
+    // FK walk kpi → action_plan → major_task → hoshin. The sponsor is an OPTIONAL escalation
+    // recipient, so any missing link OR lookup error degrades to "no sponsor" — it must never
+    // fail the save (the PMO recipients are resolved separately and still notified).
+    const ap = await getRecordById(COLLECTIONS.actionPlan, actionPlanId);
+    const majorTaskId = str(ap?.data.aplan_majorTaskId);
+    if (!majorTaskId) return null;
+    const mt = await getRecordById(COLLECTIONS.majorTask, majorTaskId);
+    const hoshinId = str(mt?.data.mtask_hoshinId);
+    if (!hoshinId) return null;
+    const h = await getRecordById(COLLECTIONS.hoshin, hoshinId);
+    return str(h?.data.hsh_sponsorUserId);
+  } catch {
+    return null;
+  }
 }
 
 /** `settingActions.getRagSettings()` — key/value map from `hk_system_setting`. */
@@ -339,6 +389,11 @@ export async function getRagThresholds(): Promise<{
 /**
  * INV-6 lock check: any locked period record overlapping [periodStart, periodEnd] for this
  * KPI. Candidate set by `kpr_kpiId` substring, then exact + overlap + locked refine in JS.
+ *
+ * Cross-backend caveat during the partial migration: locks are *written* by
+ * `lockPeriod`/`reopenPeriod`, which still run on Prisma/Postgres. Until those are also
+ * swapped to Collections, no `kpr_locked=true` row exists here, so this check is
+ * effectively a no-op. That is a known gap, not a silent bug — see the action's MIGRATION note.
  */
 export async function findLockedOverlappingPeriod(
   kpiId: string,
@@ -351,7 +406,7 @@ export async function findLockedOverlappingPeriod(
   return rows.some((r) => {
     const d = r.data;
     if (str(d.kpr_kpiId) !== kpiId) return false;
-    if (d.kpr_locked !== true) return false;
+    if (!bool(d.kpr_locked)) return false;
     const ps = str(d.kpr_periodStart);
     const pe = str(d.kpr_periodEnd);
     if (!ps || !pe) return false;
