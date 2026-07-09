@@ -2,7 +2,6 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getRagSettings } from "./settingActions";
 import { getSession } from "@/lib/auth";
 import { kpiScopeFilter, type UserScope } from "@/lib/dataScope";
 import { canManageSettings } from "@/lib/access";
@@ -13,15 +12,25 @@ import {
   shouldAutoOpenCountermeasure,
 } from "@/lib/kpiRag";
 import { diff, recordAudit } from "@/lib/engine/audit";
-import { upsertSystemTask } from "@/lib/engine/tasks";
-import { notify, notifyMany } from "@/lib/engine/notifications";
 import { computeEscalationLevel } from "@/lib/engine/escalation";
 import { countLeadingConsecutiveRed, parseFrequency, periodKeyFor } from "@/lib/engine/calendar";
 import { logEvent } from "@/lib/log";
+import * as db from "@/lib/db";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 export type SaveKpiRecordResult = ActionResult;
 
+/**
+ * MIGRATION: this action's data layer runs on the emploid.ai **Collections** service via
+ * `@/lib/db`, not Prisma/Postgres. The mechanics were proven live by the 2026-07-09 spike
+ * (see the parent repo's `docs/plans/tracer-bullet-productionize.md`). Because Collections
+ * has no multi-record transaction, the former `prisma.$transaction` block is a deterministic
+ * sequence: the period record is written first (source of truth) and every subsequent write
+ * is idempotent (countermeasure dedups on the open one; task/notification dedup on their
+ * keys). A retry after a partial failure converges rather than duplicates. The pure domain
+ * logic (RAG, escalation, calendar, diff) is unchanged. `lockPeriod`/`reopenPeriod` below
+ * still use Prisma pending their own adapter swap.
+ */
 export async function saveKpiRecord(
   kpiId: string,
   targetValue: number,
@@ -36,10 +45,7 @@ export async function saveKpiRecord(
     return { success: false, error: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, role: true, departmentId: true },
-  });
+  const dbUser = await db.getUserById(session.userId);
   if (!dbUser) {
     return { success: false, error: "Kullanıcı bulunamadı." };
   }
@@ -51,10 +57,12 @@ export async function saveKpiRecord(
   };
   const kWhere = kpiScopeFilter(scope);
 
+  // Scope guard: kWhere undefined = org-wide role (no row filter). Otherwise the KPI must be
+  // owned by the user or belong to their responsible department (personalKpiScopeFilter).
   if (kWhere) {
-    const allowed = await prisma.kPI.findFirst({
-      where: { id: kpiId, ...kWhere },
-      select: { id: true },
+    const allowed = await db.findKpiInScope(kpiId, {
+      ownerUserId: scope.id,
+      departmentId: scope.departmentId,
     });
     if (!allowed) {
       return { success: false, error: "Bu KPI için veri girişi yetkiniz yok." };
@@ -62,28 +70,14 @@ export async function saveKpiRecord(
   }
 
   // KPI ayrıntıları: başlık/sahip/departman/sıklık + (eskalasyon için) sponsor zinciri.
-  const kpi = await prisma.kPI.findUnique({
-    where: { id: kpiId },
-    select: {
-      id: true,
-      name: true,
-      ownerUserId: true,
-      responsibleDeptId: true,
-      reportingFrequency: true,
-      redThreshold: true,
-      amberThreshold: true,
-      actionPlan: {
-        select: { majorTask: { select: { hoshin: { select: { sponsorUserId: true } } } } },
-      },
-    },
-  });
+  const kpi = await db.getKpiById(kpiId);
   if (!kpi) {
     return { success: false, error: "KPI bulunamadı." };
   }
 
   const variance = actualValue - targetValue;
   const percentVariance = computePercentVariance(actualValue, targetValue);
-  const settings = await getRagSettings();
+  const settings = await db.getRagThresholds();
   // FR-12: KPI'ya özel eşik varsa varsayılanı ezer.
   const thresholds = resolveThresholds(
     { redThreshold: kpi.redThreshold, amberThreshold: kpi.amberThreshold },
@@ -95,15 +89,11 @@ export async function saveKpiRecord(
   const periodEnd = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0);
 
   // INV-6: bu dönemle çakışan kilitli bir kayıt varsa yalnız ADMIN/PMO değiştirebilir.
-  const lockedExisting = await prisma.kPIPeriodRecord.findFirst({
-    where: {
-      kpiId,
-      locked: true,
-      periodStart: { lte: periodEnd },
-      periodEnd: { gte: periodStart },
-    },
-    select: { id: true },
-  });
+  const lockedExisting = await db.findLockedOverlappingPeriod(
+    kpiId,
+    periodStart,
+    periodEnd,
+  );
   if (lockedExisting && !canManageSettings(dbUser.role)) {
     return {
       success: false,
@@ -112,80 +102,65 @@ export async function saveKpiRecord(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const record = await tx.kPIPeriodRecord.create({
-        data: {
-          kpiId,
-          periodStart,
-          periodEnd,
-          targetValue,
-          actualValue,
-          variance,
-          statusColor,
-          ownerComment:
-            ownerComment || (statusColor !== "GREEN" ? "Sistem: Yorum girilmedi" : ""),
-          varianceReason: extra?.varianceReason?.trim() || null,
-          evidenceUrl: extra?.evidenceUrl?.trim() || null,
-          submittedById: session.userId,
-          submittedAt: new Date(),
-        },
-      });
+    // No multi-record transaction on Collections: write the period record first, then the
+    // idempotent side-effects. See the MIGRATION note above.
+    const recordId = await db.createPeriodRecord({
+      kpiId,
+      periodStart,
+      periodEnd,
+      targetValue,
+      actualValue,
+      variance,
+      statusColor,
+      ownerComment:
+        ownerComment || (statusColor !== "GREEN" ? "Sistem: Yorum girilmedi" : ""),
+      varianceReason: extra?.varianceReason?.trim() || null,
+      evidenceUrl: extra?.evidenceUrl?.trim() || null,
+      submittedById: session.userId,
+    });
 
-      // INV-1: her mutasyon aynı tx içinde denetlenir.
-      await recordAudit(tx, {
-        actorUserId: session.userId,
-        action: "CREATE",
-        entityType: "KPIPeriodRecord",
-        entityId: record.id,
-        changes: diff(
-          null,
-          { targetValue, actualValue, variance, statusColor },
-          ["targetValue", "actualValue", "variance", "statusColor"],
-        ),
-        summary: `KPI dönem kaydı oluşturuldu (${statusColor})`,
-        context: "saveKpiRecord",
-      });
+    // INV-1: her mutasyon denetlenir.
+    await db.recordAudit({
+      actorUserId: session.userId,
+      action: "CREATE",
+      entityType: "KPIPeriodRecord",
+      entityId: recordId,
+      changes: diff(
+        null,
+        { targetValue, actualValue, variance, statusColor },
+        ["targetValue", "actualValue", "variance", "statusColor"],
+      ),
+      summary: `KPI dönem kaydı oluşturuldu (${statusColor})`,
+      context: "saveKpiRecord",
+    });
 
-      if (!shouldAutoOpenCountermeasure(statusColor)) {
-        return; // GREEN/AMBER: yalnız kayıt + denetim.
-      }
-
+    if (shouldAutoOpenCountermeasure(statusColor)) {
       // --- RED yolu: karşı önlem + görev + bildirim + (gerekirse) eskalasyon ---
-      const existingCm = await tx.countermeasure.findFirst({
-        where: { kpiId, status: "OPEN" },
-        select: { id: true },
-      });
+      const existingCm = await db.findOpenCountermeasure(kpiId);
       if (!existingCm) {
-        const cm = await tx.countermeasure.create({
-          data: {
-            kpiId,
-            problemStatement: `${periodDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" })} Dönemi Sapması: Hedeflenen ${targetValue}, gerçekleşen ${actualValue}.`,
-            status: "OPEN",
-          },
+        const cmId = await db.createCountermeasure({
+          kpiId,
+          problemStatement: `${periodDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" })} Dönemi Sapması: Hedeflenen ${targetValue}, gerçekleşen ${actualValue}.`,
         });
-        await recordAudit(tx, {
+        await db.recordAudit({
           actorUserId: session.userId,
           action: "CREATE",
           entityType: "Countermeasure",
-          entityId: cm.id,
+          entityId: cmId,
           summary: "RED KPI için karşı önlem otomatik açıldı",
           context: "saveKpiRecord",
         });
       }
 
-      const frequency = parseFrequency(kpi.reportingFrequency);
+      const frequency = parseFrequency(kpi.reportingFrequency ?? "");
       const periodKey = periodKeyFor(periodStart, frequency);
 
       // Ardışık RED'i (yeni kayıt dahil) hesapla → eskalasyon seviyesi.
-      const recent = await tx.kPIPeriodRecord.findMany({
-        where: { kpiId },
-        orderBy: { periodStart: "desc" },
-        select: { periodStart: true, statusColor: true },
-      });
+      const recent = await db.listPeriodRecords(kpiId);
       const consecutiveRed = countLeadingConsecutiveRed(recent, frequency);
       const level = computeEscalationLevel({ daysOverdue: 0, consecutiveRed });
 
-      await upsertSystemTask(tx, {
+      await db.upsertSystemTask({
         type: "RED_KPI_REVIEW",
         entityType: "KPI",
         entityId: kpiId,
@@ -195,11 +170,11 @@ export async function saveKpiRecord(
         escalationLevel: level,
         assigneeId: kpi.ownerUserId,
         assigneeDeptId: kpi.responsibleDeptId,
-        links: { kpiId, kpiPeriodRecordId: record.id },
+        links: { kpiId, kpiPeriodRecordId: recordId },
       });
 
       if (kpi.ownerUserId) {
-        await notify(tx, {
+        await db.notify({
           userId: kpi.ownerUserId,
           type: "KPI_RED",
           title: `KPI kırmızı: ${kpi.name}`,
@@ -210,11 +185,8 @@ export async function saveKpiRecord(
       }
 
       if (level === 2) {
-        const sponsorId = kpi.actionPlan?.majorTask?.hoshin?.sponsorUserId ?? null;
-        const pmoUsers = await tx.user.findMany({
-          where: { role: "PMO" },
-          select: { id: true },
-        });
+        const sponsorId = await db.getHoshinSponsorForKpi(kpi.actionPlanId);
+        const pmoUsers = await db.findUsersByRole("PMO");
         const seen = new Set<string>();
         const recipients: { id: string }[] = [];
         for (const id of [sponsorId, ...pmoUsers.map((u) => u.id)]) {
@@ -223,8 +195,9 @@ export async function saveKpiRecord(
             recipients.push({ id });
           }
         }
-        if (recipients.length > 0) {
-          await notifyMany(tx, recipients, {
+        for (const r of recipients) {
+          await db.notify({
+            userId: r.id,
             type: "STRATEGIC_ESCALATION",
             title: `Stratejik eskalasyon: ${kpi.name}`,
             body: `${consecutiveRed} ardışık dönem RED.`,
@@ -233,7 +206,7 @@ export async function saveKpiRecord(
             periodKey,
           });
         }
-        await recordAudit(tx, {
+        await db.recordAudit({
           actorUserId: session.userId,
           action: "ESCALATE",
           entityType: "KPI",
@@ -249,7 +222,7 @@ export async function saveKpiRecord(
           context: "saveKpiRecord",
         });
       }
-    });
+    }
   } catch (e) {
     logEvent("error", "saveKpiRecord.failed", {
       kpiId,
